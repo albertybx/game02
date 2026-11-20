@@ -24,56 +24,77 @@ class HudScene extends Phaser.Scene {
     this.scene.bringToTop();
   }
 
-  // ---------- 上方玩家資訊 ----------
+  // ---------- 玩家狀態卡 ----------
+  // 整張卡片是玩家的代表色；大頭照、名字、金幣和錢、支持者（大字）
   drawPanels() {
     const players = this.gs.players;
     let pw;
+    let ph;
     let pos;
     if (LANDSCAPE) {
       this.add.rectangle(0, 0, SIDEBAR, H, 0x1d2b53, 0.95).setOrigin(0);
       this.add.rectangle(SIDEBAR - 4, 0, 4, H, 0x000000).setOrigin(0);
       pw = SIDEBAR - 24;
-      pos = (i) => ({ x: 10, y: 10 + i * 124 });
+      ph = 112;
+      pos = (i) => ({ x: 10, y: 10 + i * 122 });
     } else {
       this.add.rectangle(0, 0, W, HUD_TOP, 0x1d2b53, 0.92).setOrigin(0);
       this.add.rectangle(0, HUD_TOP - 4, W, 4, 0x000000).setOrigin(0);
       pw = 168;
+      ph = 116;
       const gap = 8;
       const total = players.length * pw + (players.length - 1) * gap;
       const left = (W - total) / 2;
       pos = (i) => ({ x: left + i * (pw + gap), y: 10 });
     }
+    const big = LANDSCAPE; // 橫版卡片比較寬，字可以大一點
+    const outline = { stroke: '#000000', strokeThickness: 5 };
     this.panels = players.map((p, i) => {
       const { x, y } = pos(i);
       const c = this.add.container(x, y);
-      const highlight = this.add.rectangle(-4, -4, pw + 8, 116 + 8, COLORS.yellow).setOrigin(0).setVisible(false);
-      const box = this.add.rectangle(0, 0, pw, 116, COLORS.panel).setOrigin(0).setStrokeStyle(3, 0x000000);
-      const band = this.add.rectangle(0, 0, pw, 8, hex(p.color)).setOrigin(0);
-      const face = this.add.rectangle(8, 16, 56, 56, 0xfff1e8).setOrigin(0).setStrokeStyle(3, 0x000000);
-      const img = addCharacter(this, 36, 44, i, 52);
-      const name = this.add.text(70, 14, p.name, { fontFamily: FONT, fontSize: '20px', color: p.color, stroke: '#000', strokeThickness: 5 });
-      const tag = this.add.text(70, 42, '', { fontFamily: FONT, fontSize: '18px', color: '#7fd3ff' });
-      const money = this.add.text(8, 78, '', { fontFamily: FONT, fontSize: '26px', color: '#ffec27' });
-      const info = this.add.text(pw - 8, 84, '', { fontFamily: FONT, fontSize: '16px', color: '#fff1e8' }).setOrigin(1, 0);
-      c.add([highlight, box, band, face, img, name, tag, money, info]);
+      // 輪到誰：白色粗框
+      const highlight = this.add.rectangle(-5, -5, pw + 10, ph + 10, 0xffffff).setOrigin(0).setVisible(false);
+      const box = this.add.rectangle(0, 0, pw, ph, hex(p.color)).setOrigin(0).setStrokeStyle(3, 0x000000);
+      const shade = this.add.rectangle(0, ph * 0.55, pw, ph * 0.45, 0x000000, 0.18).setOrigin(0); // 下半部稍暗，數字更清楚
+      // 大頭照
+      const hs = big ? 66 : 52;
+      const face = this.add.rectangle(6, 6, hs, hs, 0x1d2b53).setOrigin(0).setStrokeStyle(3, 0x000000);
+      const head = addHeadshot(this, 8, 8, i, hs - 4);
+      // 名字
+      const nx = hs + 14;
+      const name = this.add.text(nx, 6, p.name, { fontFamily: FONT, fontSize: big ? '22px' : '18px', color: '#ffffff', ...outline });
+      // 金幣 + 錢
+      const coinY = big ? 38 : 32;
+      const coin = this.add.image(nx, coinY, 'coin').setOrigin(0, 0).setScale(big ? 1.4 : 1.15);
+      const money = this.add.text(nx + (big ? 26 : 22), coinY - 1, '', { fontFamily: FONT, fontSize: big ? '22px' : '18px', color: '#ffffff', ...outline });
+      // 支持者（大字）
+      const fansLabel = this.add.text(8, big ? 80 : 74, '支持者', { fontFamily: FONT, fontSize: big ? '18px' : '15px', color: '#ffffff', ...outline });
+      const fans = this.add.text(pw - 8, big ? 62 : 58, '', { fontFamily: FONT, fontSize: big ? '42px' : '34px', color: '#ffffff', stroke: '#000000', strokeThickness: 7 }).setOrigin(1, 0);
+      // 狀態（塞車中、出局、擁有幾塊地）
+      const info = big
+        ? this.add.text(pw - 8, 8, '', { fontFamily: FONT, fontSize: '15px', color: '#ffffff', ...outline }).setOrigin(1, 0)
+        : this.add.text(6 + hs / 2, 6 + hs, '', { fontFamily: FONT, fontSize: '13px', color: '#ffffff', backgroundColor: '#ff004d', padding: { x: 3, y: 1 } }).setOrigin(0.5, 1);
+      c.add([highlight, box, shade, face, head, name, coin, money, fansLabel, fans, info]);
       // 點玩家卡片：鏡頭移到那個角色
       box.setInteractive();
       box.on('pointerup', () => this.gs.followPlayer(p));
-      return { c, highlight, money, info, fans: tag };
+      return { c, highlight, money, info, fans, shown: p.fans };
     });
+
     const top = MAP_VIEW.y + 10;
     this.roundChip = this.add.text(MAP_VIEW.x + 12, top, '', {
       fontFamily: FONT, fontSize: '20px', color: '#ffffff', backgroundColor: '#1d2b53', padding: { x: 8, y: 4 },
     });
-    this.add.text(W - 12, top, LANDSCAPE ? '拖曳移動地圖・滾輪縮放' : '拖曳移動・兩指縮放', {
-      fontFamily: FONT, fontSize: '16px', color: '#ffffff', backgroundColor: '#00000088', padding: { x: 6, y: 3 },
-    }).setOrigin(1, 0);
 
-    // 放大 / 縮小按鈕
+    // 右上角：選戰指南、放大、縮小、音樂
+    makeButton(this, W - 12 - 76, top + 22, 152, 44, '選戰指南', { fill: 0xffec27, fontSize: '22px', onClick: () => showGuide() });
     const zx = W - 42;
-    makeButton(this, zx, top + 70, 60, 54, '＋', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom * 1.2) });
-    makeMusicButton(this, zx, top + 198);
-    makeButton(this, zx, top + 134, 60, 54, '－', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom / 1.2) });
+    makeButton(this, zx, top + 82, 60, 54, '＋', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom * 1.2) });
+    makeButton(this, zx, top + 146, 60, 54, '－', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom / 1.2) });
+    makeMusicButton(this, zx, top + 210);
+
+    this.drawPoll(top + 44);
+    this.drawTilePlate(top);
   }
 
   refreshPanels() {
@@ -82,16 +103,104 @@ class HudScene extends Phaser.Scene {
       const pan = this.panels[i];
       const owned = gs.tileState.filter((s) => s.owner === i).length;
       pan.money.setText(p.bankrupt ? '破產' : `$${p.money}`);
-      pan.fans.setText(p.bankrupt ? '' : `支持 ${p.fans}`);
-      pan.money.setColor(p.bankrupt ? '#ff004d' : p.money < 200 ? '#ff77a8' : '#ffec27');
-      let status = `地${owned}`;
+      // 支持者數字：從舊的數字滾動到新的數字
+      if (pan.shown !== p.fans) {
+        const from = { v: pan.shown };
+        this.tweens.killTweensOf(pan.fansCounter || {});
+        pan.fansCounter = from;
+        this.tweens.add({ targets: from, v: p.fans, duration: 500, onUpdate: () => pan.fans.setText(`${Math.round(from.v)}`) });
+        this.tweens.add({ targets: pan.fans, scale: 1.18, duration: 120, yoyo: true });
+        pan.shown = p.fans;
+      } else {
+        pan.fans.setText(`${p.fans}`);
+      }
+      let status = LANDSCAPE ? `地 ${owned}` : '';
       if (p.skip > 0) status = '塞車中';
       if (p.bankrupt) status = '出局';
       pan.info.setText(status);
+      pan.info.setVisible(status !== '');
       pan.c.setAlpha(p.bankrupt ? 0.45 : 1);
       pan.highlight.setVisible(i === gs.current && !gs.gameOver);
     });
     this.roundChip.setText(`第 ${Math.min(gs.round, GAME_RULES.maxRounds)} / ${GAME_RULES.maxRounds} 回合`);
+    this.refreshPoll();
+  }
+
+  // ---------- 即時民調：每位玩家支持者的橫條圖 ----------
+  // 最高的人長條拉滿，其他人照比例；右邊顯示佔所有支持者的百分比
+  drawPoll(y) {
+    const players = this.gs.players;
+    // 手機畫面會整個縮小，所以直版的字和長條要大一點
+    const S = LANDSCAPE ? 1 : 1.3;
+    const pw = Math.round(250 * S);
+    const rowH = Math.round(28 * S);
+    const head = Math.round(36 * S);
+    const ph = head + players.length * rowH + 4;
+    const x = MAP_VIEW.x + 12;
+    const c = this.add.container(x, y);
+    c.add(this.add.rectangle(0, 0, pw, ph, 0x1d2b53, 0.88).setOrigin(0).setStrokeStyle(3, 0x000000));
+    c.add(this.add.text(10, 6, '即時民調', { fontFamily: FONT, fontSize: `${Math.round(18 * S)}px`, color: '#ffec27' }));
+    this.pollBarW = Math.round(142 * S);
+    this.pollRows = players.map((p, k) => {
+      const ry = head - 2 + k * rowH;
+      const hs = Math.round(24 * S);
+      const bx = hs + 16;
+      const bh = Math.round(16 * S);
+      c.add(this.add.rectangle(8, ry, hs, hs, 0xfff1e8).setOrigin(0));
+      c.add(addHeadshot(this, 9, ry + 1, p.id, hs - 2));
+      c.add(this.add.rectangle(bx, ry + 4, this.pollBarW, bh, 0x0b1020).setOrigin(0));
+      const bar = this.add.rectangle(bx, ry + 4, 2, bh, hex(p.color)).setOrigin(0);
+      c.add(bar);
+      const pct = this.add.text(pw - 8, ry + 2, '', { fontFamily: FONT, fontSize: `${Math.round(16 * S)}px`, color: '#ffffff' }).setOrigin(1, 0);
+      c.add(pct);
+      return { bar, pct };
+    });
+  }
+
+  refreshPoll() {
+    if (!this.pollRows) return;
+    const players = this.gs.players;
+    const fans = players.map((p) => (p.bankrupt ? 0 : p.fans));
+    const total = fans.reduce((a, b) => a + b, 0) || 1;
+    const max = Math.max(...fans, 1);
+    players.forEach((p, k) => {
+      const row = this.pollRows[k];
+      const w = Math.max(2, Math.round(this.pollBarW * fans[k] / max));
+      this.tweens.killTweensOf(row.bar);
+      this.tweens.add({ targets: row.bar, width: w, duration: 500, ease: 'Quad.easeOut' });
+      row.pct.setText(`${Math.round(fans[k] * 100 / total)}%`);
+    });
+  }
+
+  // ---------- 目前格子的名稱（地圖上不再顯示名稱，改成這裡顯示角色踩在哪一格）----------
+  drawTilePlate(y) {
+    const S = LANDSCAPE ? 1 : 1.3; // 直版字大一點
+    this.plateH = Math.round(56 * S);
+    // 橫版：放在地圖上方中間；直版：上方太擠，放在地圖下方（訊息框上面）
+    const x = MAP_VIEW.x + MAP_VIEW.w / 2;
+    const py = LANDSCAPE ? y : MAP_VIEW.y + MAP_VIEW.h - this.plateH - 12;
+    this.plate = this.add.container(x, py).setVisible(false);
+    this.plateBg = this.add.rectangle(0, 0, 200, this.plateH, 0x1d2b53, 0.92).setOrigin(0.5, 0).setStrokeStyle(4, 0xffffff);
+    this.plateName = this.add.text(0, 4, '', { fontFamily: FONT, fontSize: `${Math.round(24 * S)}px`, color: '#ffffff' }).setOrigin(0.5, 0);
+    this.plateSub = this.add.text(0, Math.round(32 * S), '', { fontFamily: FONT, fontSize: `${Math.round(16 * S)}px`, color: '#c2c3c7' }).setOrigin(0.5, 0);
+    this.plate.add([this.plateBg, this.plateName, this.plateSub]);
+  }
+
+  showTile(i, p) {
+    if (!this.plate) return;
+    const t = TILES[i];
+    const st = this.gs.tileState[i];
+    const kind = {
+      go: `經過領 $${GAME_RULES.passGoBonus}`, jam: '下回合暫停一次', mrt: '休息一下', tow: `罰款 $${GAME_RULES.towFine}`,
+      chance: '抽一張機會卡', fate: '抽一張命運卡', talent: '遇到政壇前輩',
+      property: `${t.district}・地標 $${t.price}`, chief: `${t.district}・里長 $${t.price}`,
+    }[t.type] || '';
+    const owner = st && st.owner !== null ? `・${this.gs.players[st.owner].name}的地盤` : '';
+    this.plateName.setText(t.name);
+    this.plateSub.setText(kind + owner);
+    const w = Math.max(this.plateName.width, this.plateSub.width) + 32;
+    this.plateBg.setSize(w, this.plateH).setStrokeStyle(4, hex(p.color));
+    this.plate.setVisible(true);
   }
 
   // ---------- 下方：骰子 + 訊息 ----------
