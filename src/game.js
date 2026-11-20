@@ -10,6 +10,8 @@ const MAP_MIN = -2;         // 地圖從第 -2 格畫到第 7 格（外面一圈
 const MAP_MAX = 7;
 const ORIGIN_X = 640;
 const ORIGIN_Y = 260;
+const UNOWNED_COLOR = 0x9a9aa6;  // 還沒人買的地：灰色
+const SHOW_BUILDING_NAMES = false; // 要不要在建築下面顯示名字
 
 class GameScene extends Phaser.Scene {
   constructor() { super('game'); }
@@ -44,6 +46,7 @@ class GameScene extends Phaser.Scene {
     this.drawGround();
     this.drawRoad();
     this.drawLots();
+    TILES.forEach((t, i) => this.refreshTile(i));
     this.drawTrees();
     this.createTokens();
     this.setupCamera();
@@ -173,10 +176,10 @@ class GameScene extends Phaser.Scene {
       this.diamond(g, x, y, ISO_W, ISO_H, corner ? 0xb8a98a : 0x5a5a66);
       this.diamond(g, x, y, ISO_W - 14, ISO_H - 7, corner ? 0xd6c6a0 : 0x6b6b78);
       this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30);
-      // 地產格塗上顏色組的色塊（像大富翁的色條）
+      // 地產格的小色塊：還沒人買是灰色，買下後換成地主的顏色（在 refreshTile 畫）
       if (t.type === 'property') {
-        this.diamond(g, x, y, 34, 17, hex(GROUPS[t.group]));
-        this.diamondLine(g, x, y, 34, 17, 2, 0x000000);
+        this.roadMarkers = this.roadMarkers || [];
+        this.roadMarkers[i] = this.add.graphics().setDepth(-799);
       }
       // 機會 / 命運 / 角落：在路上放大圖示
       if (t.type !== 'property') {
@@ -220,7 +223,7 @@ class GameScene extends Phaser.Scene {
       // 空地：人行磚
       this.diamond(g, x, y, ISO_W - 8, ISO_H - 4, 0xd9cbb0);
       this.diamond(g, x, y, ISO_W - 24, ISO_H - 12, 0xe8dcc4);
-      this.diamondLine(g, x, y, ISO_W - 8, ISO_H - 4, 3, hex(GROUPS[t.group]));
+      this.diamondLine(g, x, y, ISO_W - 8, ISO_H - 4, 3, UNOWNED_COLOR);
 
       // 建築：有 AI 畫的圖就用，沒有就用像素小圖
       let bld;
@@ -233,11 +236,13 @@ class GameScene extends Phaser.Scene {
       }
       bld.setDepth(y + 20);
 
-      // 名牌
-      this.add.text(x, y + 22, t.name, {
-        fontFamily: FONT, fontSize: '18px', color: '#ffffff', backgroundColor: '#1d2b53',
-        padding: { x: 6, y: 2 },
-      }).setOrigin(0.5, 0).setDepth(y + 300);
+      // 建築名牌：設定 SHOW_BUILDING_NAMES = true 可以再打開（點建築一樣能看名字和價錢）
+      if (SHOW_BUILDING_NAMES) {
+        this.add.text(x, y + 22, t.name, {
+          fontFamily: FONT, fontSize: '18px', color: '#ffffff', backgroundColor: '#1d2b53',
+          padding: { x: 6, y: 2 },
+        }).setOrigin(0.5, 0).setDepth(y + 300);
+      }
 
       // 地主標記放這層（之後重畫）
       this.lotOverlays[i] = this.add.container(x, y).setDepth(y + 25);
@@ -301,6 +306,14 @@ class GameScene extends Phaser.Scene {
     if (!ov) return;
     ov.removeAll(true);
     const st = this.tileState[i];
+    // 路上的小色塊
+    const mk = this.roadMarkers && this.roadMarkers[i];
+    if (mk) {
+      const { x, y } = this.tileCenter(i);
+      mk.clear();
+      this.diamond(mk, x, y, 34, 17, st.owner === null ? UNOWNED_COLOR : hex(this.players[st.owner].color));
+      this.diamondLine(mk, x, y, 34, 17, 2, 0x000000);
+    }
     if (st.owner === null) return;
     const color = hex(this.players[st.owner].color);
     const g = this.add.graphics();
