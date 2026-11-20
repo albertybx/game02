@@ -31,12 +31,21 @@ const hex = (s) => parseInt(s.replace('#', ''), 16);
 const Sfx = {
   ctx: null,
   muted: false,
+  // 瀏覽器規定：要使用者點過畫面才能發出聲音。第一次點的時候建立音效系統、開始播音樂
   unlock() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) this.ctx = new AC();
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();   // 總音量
+      this.master.gain.value = 0.9;
+      this.master.connect(this.ctx.destination);
+      this.bus = this.ctx.createGain();      // 音效音量
+      this.bus.gain.value = 1;
+      this.bus.connect(this.master);
+      Music.init(this.ctx, this.master);     // 背景音樂（music.js）
     }
-    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
   },
   beep(freq = 440, dur = 0.06, type = 'square', vol = 0.06, delay = 0) {
     if (this.muted || !this.ctx) return;
@@ -47,7 +56,7 @@ const Sfx = {
     osc.frequency.setValueAtTime(freq, t);
     gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(gain).connect(this.ctx.destination);
+    osc.connect(gain).connect(this.bus);
     osc.start(t);
     osc.stop(t + dur + 0.02);
   },

@@ -72,6 +72,7 @@ class HudScene extends Phaser.Scene {
     // 放大 / 縮小按鈕
     const zx = W - 42;
     makeButton(this, zx, top + 70, 60, 54, '＋', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom * 1.2) });
+    makeMusicButton(this, zx, top + 198);
     makeButton(this, zx, top + 134, 60, 54, '－', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom / 1.2) });
   }
 
@@ -183,7 +184,7 @@ class HudScene extends Phaser.Scene {
     this.choiceLayer.removeAll(true);
     const ranking = [...gs.players].sort((a, b) => (a.bankrupt - b.bankrupt) || (gs.assetsOf(b) - gs.assetsOf(a)));
     const winner = ranking[0];
-    Sfx.win();
+    Music.want('victory');
 
     const layer = this.add.container(0, 0).setDepth(100);
     layer.add(this.add.rectangle(0, 0, W, H, 0x000000, 0.88).setOrigin(0).setInteractive());

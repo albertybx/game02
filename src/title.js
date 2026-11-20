@@ -24,6 +24,11 @@ class TitleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(COLORS.bg);
     this.drawSkyline();
 
+    // 背景音樂：點一下畫面任何地方就會開始（瀏覽器規定要先點過才能有聲音）
+    Music.want('title');
+    this.input.on('pointerdown', () => Sfx.unlock());
+    makeMusicButton(this, W - 46, 46);
+
     // 直版、橫版的位置
     const L = LANDSCAPE
       ? { t1: 86, t2: 186, sub: 258, chars: 345, names: 415, countLbl: 478, count: 540, modeLbl: 478, mode: 540, start: 656, hint: 728, countX: 340, modeX: 940 }
@@ -60,7 +65,7 @@ class TitleScene extends Phaser.Scene {
       onClick: () => this.scene.start('game', { playerCount: this.playerCount, mode: this.mode }),
     });
 
-    this.add.text(W / 2, L.hint, '音效：點按鈕後開啟', { fontFamily: FONT, fontSize: '20px', color: '#83769c' }).setOrigin(0.5);
+    this.add.text(W / 2, L.hint, '點一下畫面開啟音樂和音效（右上角 ♪ 可關閉音樂）', { fontFamily: FONT, fontSize: '20px', color: '#83769c' }).setOrigin(0.5);
     this.refresh();
   }
 
