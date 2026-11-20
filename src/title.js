@@ -26,7 +26,6 @@ class TitleScene extends Phaser.Scene {
 
     // 背景音樂：點一下畫面任何地方就會開始（瀏覽器規定要先點過才能有聲音）
     Music.want('title');
-    this.input.on('pointerdown', () => Sfx.unlock());
     makeMusicButton(this, W - 46, 46);
 
     // 直版、橫版的位置
@@ -65,8 +64,33 @@ class TitleScene extends Phaser.Scene {
       onClick: () => this.scene.start('game', { playerCount: this.playerCount, mode: this.mode }),
     });
 
-    this.add.text(W / 2, L.hint, '點一下畫面開啟音樂和音效（右上角 ♪ 可關閉音樂）', { fontFamily: FONT, fontSize: '20px', color: '#83769c' }).setOrigin(0.5);
+    this.add.text(W / 2, L.hint, '右上角 ♪ 可以開關音樂', { fontFamily: FONT, fontSize: '20px', color: '#83769c' }).setOrigin(0.5);
     this.refresh();
+    if (!Sfx.ready) this.showPressStart();
+  }
+
+  // 「點一下開始」畫面：瀏覽器不允許網頁一打開就自動出聲，要先點一下。
+  // 用這個畫面讓第一下點擊自然發生，點完音樂就開始。
+  showPressStart() {
+    const layer = this.add.container(0, 0).setDepth(200);
+    const bg = this.add.rectangle(0, 0, W, H, 0x0b1020, 0.92).setOrigin(0).setInteractive();
+    layer.add(bg);
+    layer.add(this.add.text(W / 2, H / 2 - 150, '台北政壇大富翁', {
+      fontFamily: FONT, fontSize: '64px', color: '#ffec27', stroke: '#000000', strokeThickness: 10,
+    }).setOrigin(0.5));
+    const press = this.add.text(W / 2, H / 2 + 10, '▶ 點一下開始', {
+      fontFamily: FONT, fontSize: '48px', color: '#fff1e8', stroke: '#000000', strokeThickness: 8,
+    }).setOrigin(0.5);
+    layer.add(press);
+    this.tweens.add({ targets: press, alpha: 0.15, duration: 500, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [1] });
+    layer.add(this.add.text(W / 2, H / 2 + 90, '會開啟音樂和音效', {
+      fontFamily: FONT, fontSize: '24px', color: '#83769c',
+    }).setOrigin(0.5));
+    bg.once('pointerup', () => {
+      Sfx.unlock();
+      Sfx.coin();
+      this.tweens.add({ targets: layer, alpha: 0, duration: 250, onComplete: () => layer.destroy() });
+    });
   }
 
   refresh() {
