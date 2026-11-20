@@ -43,7 +43,7 @@
 | `src/music.js` | 8-bit 背景音樂：樂譜（`SONGS`）和即時演奏的合成器，想改旋律改樂譜就好 |
 | `src/boot.js` | 啟動遊戲 |
 | `assets/buildings/` | （之後放 AI 畫的建築圖，在 `src/data.js` 的 `BUILDING_IMAGES` 登記） |
-| `assets/generals/` | 8 位戰將的 Q 版像素圖（Codex 生成） |
+| `assets/generals/` | 12 位戰將的 Q 版像素圖（Codex 生成） |
 | `lib/phaser.min.js` | Phaser 4.2.1 遊戲引擎（MIT 授權） |
 | `assets/fonts/` | 俐方體 11 號像素字型（SIL OFL 授權） |
 
