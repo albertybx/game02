@@ -85,5 +85,16 @@ const FATE_CARDS = [
 // key 要跟上面 TILES 的 icon 名稱一樣；沒登記的地標會用程式畫的小像素圖代替。
 // 圖片建議：透明背景、建築底部置中、寬度約 256 像素。
 const BUILDING_IMAGES = {
+  longshan: 'assets/buildings/longshan.png',
+  redhouse: 'assets/buildings/redhouse.png',
+  station: 'assets/buildings/station.png',
+  beitou: 'assets/buildings/beitou.png',
+  nightmarket: 'assets/buildings/nightmarket.png',
+  palace: 'assets/buildings/palace.png',
+  grandhotel: 'assets/buildings/grandhotel.png',
+  arena: 'assets/buildings/arena.png',
+  sunyatsen: 'assets/buildings/sunyatsen.png',
+  cks: 'assets/buildings/cks.png',
+  presidential: 'assets/buildings/presidential.png',
   taipei101: 'assets/buildings/taipei101.png',
 };
