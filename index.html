@@ -17,14 +17,20 @@
 </head>
 <body>
   <div id="game"></div>
-  <script src="lib/phaser.min.js"></script>
-  <script src="src/pixelart.js"></script>
-  <script src="src/data.js"></script>
-  <script src="src/common.js"></script>
-  <script src="src/music.js"></script>
-  <script src="src/title.js"></script>
-  <script src="src/game.js"></script>
-  <script src="src/hud.js"></script>
-  <script src="src/boot.js"></script>
+  <script>
+    // 版本號：每次更新遊戲就改這個（例如 2026.11.20-2），瀏覽器就會重新下載新的檔案，不會用到舊的暫存
+    window.GAME_VERSION = '2026.11.20-3';
+    [
+      'lib/phaser.min.js',
+      'src/pixelart.js',
+      'src/data.js',
+      'src/common.js',
+      'src/music.js',
+      'src/title.js',
+      'src/game.js',
+      'src/hud.js',
+      'src/boot.js',
+    ].forEach((f) => document.write('<script src="' + f + '?v=' + window.GAME_VERSION + '"><\/script>'));
+  </script>
 </body>
 </html>

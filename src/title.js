@@ -11,8 +11,9 @@ class TitleScene extends Phaser.Scene {
 
   preload() {
     // AI 畫的建築圖（登記在 data.js 的 BUILDING_IMAGES）
-    for (const [key, path] of Object.entries(BUILDING_IMAGES)) this.load.image(`bld_${key}`, path);
-    CHARACTERS.forEach((ch, i) => { if (ch.image) this.load.image(`charimg${i}`, ch.image); });
+    const v = `?v=${window.GAME_VERSION || ''}`; // 版本號：更新後瀏覽器會重新下載圖片
+    for (const [key, path] of Object.entries(BUILDING_IMAGES)) this.load.image(`bld_${key}`, path + v);
+    CHARACTERS.forEach((ch, i) => { if (ch.image) this.load.image(`charimg${i}`, ch.image + v); });
     this.load.on('loaderror', (file) => console.warn('圖片載入失敗：', file.src));
   }
 
@@ -65,6 +66,8 @@ class TitleScene extends Phaser.Scene {
     });
 
     this.add.text(W / 2, L.hint, '右上角 ♪ 可以開關音樂', { fontFamily: FONT, fontSize: '20px', color: '#83769c' }).setOrigin(0.5);
+    // 版本號（確認是不是最新版用）
+    this.add.text(12, 12, `版本 ${window.GAME_VERSION || ''}`, { fontFamily: FONT, fontSize: '18px', color: '#83769c' });
     this.refresh();
     if (!Sfx.ready) this.showPressStart();
   }

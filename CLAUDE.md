@@ -26,3 +26,9 @@
 
 `.claude/skills/` 是建立 repo 當下從範本複製過來的，不會自動更新。使用者想更新時，從上面的上游 repo
 取最新版，覆蓋 `.claude/skills/`，並保留 `.claude/skills-license/` 裡的授權檔。
+
+## 發佈新版（這個遊戲專案）
+
+- 遊戲網址：https://albertybx.github.io/game02/ （GitHub Pages，合併到 `main` 後一兩分鐘自動更新）
+- **每次改遊戲都要把 `index.html` 裡的 `window.GAME_VERSION` 改成新的版本號**（例如 `2026.11.20-3`），
+  不然手機瀏覽器會沿用舊的暫存檔，看不到新版。標題畫面左上角會顯示版本號，方便使用者確認。
