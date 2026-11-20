@@ -412,10 +412,11 @@ class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     // 鏡頭可以移動的範圍：整塊陸地再往外留一些
     const pts = [...this.board.land].map((k) => { const [c, r] = k.split(',').map(Number); return this.iso(c, r); });
-    const minX = Math.min(...pts.map((q) => q.x)) - 500;
-    const maxX = Math.max(...pts.map((q) => q.x)) + 500;
-    const minY = Math.min(...pts.map((q) => q.y)) - 600;
-    const maxY = Math.max(...pts.map((q) => q.y)) + 600;
+    // 留寬一點，縮小畫面時鏡頭也能把邊緣的角色移到正中間（外面都是河水）
+    const minX = Math.min(...pts.map((q) => q.x)) - 900;
+    const maxX = Math.max(...pts.map((q) => q.x)) + 900;
+    const minY = Math.min(...pts.map((q) => q.y)) - 900;
+    const maxY = Math.max(...pts.map((q) => q.y)) + 900;
     cam.setBounds(minX, minY, maxX - minX, maxY - minY);
     cam.setZoom(ZOOM.start);
     this.dragging = false;
@@ -454,7 +455,8 @@ class GameScene extends Phaser.Scene {
     const z = this.cameras.main.zoom;
     const cx = MAP_VIEW.x + MAP_VIEW.w / 2 - W / 2;
     const cy = MAP_VIEW.y + MAP_VIEW.h / 2 + 30 - H / 2;
-    return { x: -cx / z, y: -cy / z };
+    // 角色在螢幕上的位置 = 畫面中心 + 偏移 × 放大倍率，所以偏移要除以放大倍率
+    return { x: cx / z, y: cy / z };
   }
 
   followPlayer(p) {
