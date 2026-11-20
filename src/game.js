@@ -318,12 +318,25 @@ class GameScene extends Phaser.Scene {
   setupCamera() {
     const cam = this.cameras.main;
     cam.setBounds(-300, -420, 1880, 1640);
+    cam.setZoom(ZOOM.start);
     this.dragging = false;
+    this.input.addPointer(1); // 允許兩指（縮放用）
     this.input.on('pointerdown', (p) => {
       this.dragStart = { x: p.x, y: p.y, sx: cam.scrollX, sy: cam.scrollY };
       this.dragging = false;
     });
     this.input.on('pointermove', (p) => {
+      // 兩指縮放
+      const p1 = this.input.pointer1;
+      const p2 = this.input.pointer2;
+      if (p1.isDown && p2.isDown) {
+        const d = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
+        if (!this.pinch) this.pinch = { d, zoom: cam.zoom };
+        else this.setZoom(this.pinch.zoom * d / this.pinch.d);
+        this.dragStart = null;
+        return;
+      }
+      this.pinch = null;
       if (!p.isDown || !this.dragStart) return;
       const dx = p.x - this.dragStart.x;
       const dy = p.y - this.dragStart.y;
@@ -332,13 +345,33 @@ class GameScene extends Phaser.Scene {
       cam.stopFollow();
       cam.setScroll(this.dragStart.sx - dx / cam.zoom, this.dragStart.sy - dy / cam.zoom);
     });
-    this.input.on('pointerup', () => { this.dragStart = null; });
+    this.input.on('pointerup', () => { this.dragStart = null; this.pinch = null; });
+    // 電腦：滑鼠滾輪縮放
+    this.input.on('wheel', (pointer, objs, dx, dy) => this.setZoom(cam.zoom * (dy > 0 ? 0.9 : 1.1)));
+  }
+
+  // 鏡頭跟著角色，讓角色出現在「地圖看得到的範圍」中間（不被介面擋住）
+  followOffset() {
+    const z = this.cameras.main.zoom;
+    const cx = MAP_VIEW.x + MAP_VIEW.w / 2 - W / 2;
+    const cy = MAP_VIEW.y + MAP_VIEW.h / 2 + 30 - H / 2;
+    return { x: -cx / z, y: -cy / z };
   }
 
   followPlayer(p) {
     const cam = this.cameras.main;
-    // 讓角色出現在上方玩家列和下方訊息框之間
-    cam.startFollow(this.tokens[p.id], true, 0.12, 0.12, 0, -40);
+    const o = this.followOffset();
+    cam.startFollow(this.tokens[p.id], true, 0.12, 0.12, o.x, o.y);
+  }
+
+  // 放大縮小（按鈕、兩指、滑鼠滾輪都用這個）
+  setZoom(z) {
+    const cam = this.cameras.main;
+    cam.setZoom(Phaser.Math.Clamp(z, ZOOM.min, ZOOM.max));
+    if (cam._follow) {
+      const o = this.followOffset();
+      cam.setFollowOffset(o.x, o.y);
+    }
   }
 
   // ---------- 棋子 ----------
@@ -356,7 +389,7 @@ class GameScene extends Phaser.Scene {
     this.tokens = this.players.map((p) => {
       const { x, y } = this.tokenPos(p);
       const shadow = this.add.ellipse(x, y, 34, 12, 0x000000, 0.35);
-      const t = addCharacter(this, x, y, p.id, 64).setOrigin(0.5, 0.95);
+      const t = addCharacter(this, x, y, p.id, 72).setOrigin(0.5, 0.95);
       t.shadow = shadow;
       t.setDepth(y + 30);
       shadow.setDepth(y + 29);

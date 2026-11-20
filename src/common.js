@@ -1,8 +1,18 @@
 // 台北政壇大富翁 — 共用工具
-// 共用設定、音效、按鈕。畫面 720 x 1120（直式，適合手機）。
+// 共用設定、音效、按鈕。
 
-const W = 720;
-const H = 1120;
+// 畫面方向：螢幕是橫的（電腦、平板橫放）用寬版面 1280x760；直的（手機）用直版面 720x1120。
+// 打開網頁時決定；在標題畫面轉螢幕會自動重新整理。
+const LANDSCAPE = window.innerWidth > window.innerHeight * 1.05;
+const W = LANDSCAPE ? 1280 : 720;
+// 直版的高度跟著手機螢幕比例調整，讓畫面填滿整個手機螢幕（不會上下留黑邊）
+const H = LANDSCAPE ? 760 : Math.round(Phaser.Math.Clamp(720 * window.innerHeight / window.innerWidth, 1040, 1560));
+// 直版內容是照 1120 高設計的，畫面比較高時，標題和結算畫面往下移一半的差距，保持置中
+const TALL_DY = LANDSCAPE ? 0 : Math.round((H - 1120) / 2);
+// 扣掉介面之後，地圖看得到的範圍（角色會出現在這塊的中間）
+const MAP_VIEW = LANDSCAPE ? { x: 300, y: 0, w: 980, h: 630 } : { x: 0, y: 136, w: 720, h: H - 250 - 136 };
+// 地圖鏡頭的預設放大倍率、最小、最大
+const ZOOM = { start: LANDSCAPE ? 1.15 : 1.65, min: 0.6, max: 2.4 };
 const TILE = 120;           // 每格大小
 const BOARD = 6;            // 地圖每邊 6 格（含角落）→ 一圈 20 格
 const FONT = 'Cubic11, monospace';
