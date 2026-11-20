@@ -92,6 +92,7 @@ class HudScene extends Phaser.Scene {
     makeButton(this, zx, top + 82, 60, 54, '＋', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom * 1.2) });
     makeButton(this, zx, top + 146, 60, 54, '－', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom / 1.2) });
     makeMusicButton(this, zx, top + 210);
+    makeButton(this, zx, top + 274, 60, 54, '戰將', { fill: 0xffa300, fontSize: '20px', onClick: () => this.gs.generals.showRoster() });
 
     this.drawPoll(top + 44);
     this.drawTilePlate(top);

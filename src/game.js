@@ -33,7 +33,8 @@ class GameScene extends Phaser.Scene {
     this.round = 1;
     this.current = 0;
     this.gameOver = false;
-    this.tileState = TILES.map(() => ({ owner: null, level: 0 }));
+    this.tileState = TILES.map(() => ({ owner: null, level: 0, since: 0, bonus: 0 }));
+    this.generals = new GeneralSystem(this);
     this.players = [];
     for (let i = 0; i < this.playerCount; i++) {
       this.players.push({
@@ -66,6 +67,7 @@ class GameScene extends Phaser.Scene {
     this.drawLots();
     this.bakeStatic();
     TILES.forEach((t, i) => this.refreshTile(i));
+    this.stationIcons = [];
     this.drawTrees();
     this.createTokens();
     this.setupCamera();
@@ -434,6 +436,28 @@ class GameScene extends Phaser.Scene {
     for (let k = 0; k < st.level; k++) ov.add(makeFlag(38 - k * 16, 12 + k * 6, 34));
   }
 
+  // 駐守中的戰將：站在里長辦公處旁邊，腳下有陣營顏色的圈
+  refreshStations() {
+    (this.stationIcons || []).forEach((o) => o.destroy());
+    this.stationIcons = [];
+    for (const g of this.generals.list) {
+      if (g.stationedAt === null) continue;
+      const cell = this.lotCell(g.stationedAt);
+      const { x, y } = this.iso(cell.col, cell.row);
+      const c = this.add.container(x + 30, y + 22).setDepth(y + 40);
+      const ring = this.add.graphics();
+      this.diamond(ring, 0, 0, 44, 22, hex(this.players[g.owner].color));
+      this.diamondLine(ring, 0, 0, 44, 22, 2, 0x000000);
+      c.add(ring);
+      if (this.textures.exists(`genimg${g.id}`)) {
+        const im = this.add.image(0, 4, `genimg${g.id}`).setOrigin(0.5, 1);
+        im.setScale(52 / im.width);
+        c.add(im);
+      }
+      this.stationIcons.push(c);
+    }
+  }
+
   // ---------- 鏡頭 ----------
   setupCamera() {
     const cam = this.cameras.main;
@@ -591,6 +615,8 @@ class GameScene extends Phaser.Scene {
     this.followPlayer(p);
     this.bounceToken(p);
     this.hud.showTile(p.pos, p);
+
+    this.generals.onTurnStart(p);
 
     // 【A】每回合開始，自己的地標和里長會帶來支持者
     const income = this.fansIncomeOf(p);
@@ -762,6 +788,7 @@ class GameScene extends Phaser.Scene {
     this.tileState.forEach((s, i) => {
       if (s.owner === p.id) { s.owner = null; s.level = 0; this.refreshTile(i); }
     });
+    this.generals.release(p);
     this.tokens[p.id].setVisible(false);
     this.tokens[p.id].shadow.setVisible(false);
     Sfx.bad();
@@ -788,20 +815,17 @@ class GameScene extends Phaser.Scene {
         break;
       case 'chief':
         if (st.owner === null) await this.offerBuy(p, i);
-        else if (st.owner === p.id) {
-          this.hud.say(`${t.name} 是自己人，\n里民服務做得好，口碑不錯！`);
-          await this.wait(1000);
-        } else await this.payRent(p, i);
+        else if (st.owner === p.id) await this.generals.onOwnChief(p, i);
+        else {
+          await this.payRent(p, i);
+          if (!p.bankrupt && !this.gameOver) await this.generals.onRivalChief(p, i);
+        }
         break;
       case 'quiz':
         await this.doQuiz(p);
         break;
       case 'talent':
-        // 戰將功能做好前的暫時效果
-        this.hud.say(`${p.name} 遇到政壇前輩，\n傳授選戰心法！`);
-        await this.wait(500);
-        this.changeFans(p, GAME_RULES.talentFans);
-        await this.wait(900);
+        await this.generals.onRecruit(p);
         break;
       case 'chance':
         await this.drawCard(p, 'chance');
@@ -844,6 +868,8 @@ class GameScene extends Phaser.Scene {
     if (ans) {
       p.money -= t.price;
       this.tileState[i].owner = p.id;
+      this.tileState[i].since = this.round;
+      this.tileState[i].bonus = 0;
       this.refreshTile(i);
       this.hud.showTile(i, p);
       Sfx.buy();
@@ -939,6 +965,8 @@ class GameScene extends Phaser.Scene {
   }
 
   async applyCard(p, card) {
+    if (card.scandal) await this.generals.scandal(p);
+    if (card.loyaltyAll) await this.generals.loyaltyAll(p, card.loyaltyAll);
     if (card.fans) {
       this.changeFans(p, card.fans);
       await this.wait(500);
