@@ -4,7 +4,11 @@
 const GAME_RULES = {
   startMoney: 1500,   // 每人一開始的錢
   passGoBonus: 200,   // 經過起點拿的錢
-  maxRounds: 20,      // 第幾回合結束就是「投票日」，比總資產
+  maxRounds: 20,      // 第幾回合結束就是「投票日」，比誰的支持者最多
+  startFans: 1000,    // 每人一開始的支持者
+  // 【暫定】地標帶來的支持者（之後討論好再調整）
+  buyFansRate: 2,     // 買下地標：支持者 + 價錢 × 2
+  buildFansRate: 1,   // 蓋一層競選總部：支持者 + 價錢 × 1
   maxLevel: 3,        // 競選總部最多蓋幾層
   rentMultiplier: [1, 4, 10, 20], // 0~3 層時，過路費是基本過路費的幾倍
   towFine: 100,       // 拖吊場罰款
@@ -56,6 +60,8 @@ const CHARACTERS = [
 ];
 
 // 卡片效果 effect：
+//   fans: 支持者增加(正數)或減少(負數)多少
+//   fansFromEach: 從每位對手身上拉走多少支持者
 //   money: 拿到(正數)或付出(負數)多少錢
 //   move: 前進(正)或後退(負)幾格
 //   goto: 直接走到第幾格（會經過起點就領錢）
@@ -69,6 +75,11 @@ const CHANCE_CARDS = [
   { text: '搭捷運去下一個行程，\n直接前往捷運站', goto: 10 },
   { text: '回到起點重新拉票，\n前往起點', goto: 0 },
   { text: '電視辯論表現亮眼！\n每位對手付你 $30', fromEach: 30 },
+  { text: '政見影片在網路爆紅！\n支持者 +300', fans: 300 },
+  { text: '參加廟會遶境，跟鄉親搏感情，\n支持者 +200', fans: 200 },
+  { text: '名人站台力挺！\n支持者 +400', fans: 400 },
+  { text: '舉辦親子園遊會，花 $100，\n支持者 +250', money: -100, fans: 250 },
+  { text: '辯論會大獲全勝！\n每位對手有 100 位支持者倒戈', fansFromEach: 100 },
 ];
 
 const FATE_CARDS = [
@@ -79,6 +90,11 @@ const FATE_CARDS = [
   { text: '民調下滑，\n退後 2 格', move: -2 },
   { text: '口誤被做成迷因，聲量大漲！\n獲得 $50', money: 50 },
   { text: '競選總部要繳水電費，\n每一層付 $25', perLevel: 25 },
+  { text: '失言被罵翻，\n支持者 -200', fans: -200 },
+  { text: '政見跳票被抓包，\n支持者 -250', fans: -250 },
+  { text: '造勢晚會遇到大雨，花 $80，\n支持者 -100', money: -80, fans: -100 },
+  { text: '被假消息抹黑，\n支持者 -150', fans: -150 },
+  { text: '幫鄰居修路有功，口碑變好，\n支持者 +150', fans: 150 },
 ];
 
 // AI 畫的建築圖：把圖片放到 assets/buildings/ 資料夾，再在這裡登記。

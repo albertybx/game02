@@ -29,6 +29,7 @@ class GameScene extends Phaser.Scene {
         id: i,
         ...CHARACTERS[i],
         money: GAME_RULES.startMoney,
+        fans: GAME_RULES.startFans,
         pos: 0,
         skip: 0,
         bankrupt: false,
@@ -474,7 +475,7 @@ class GameScene extends Phaser.Scene {
   async runGame() {
     this.hud.refreshPanels();
     this.followPlayer(this.players[0]);
-    this.hud.say('選戰開始！\n誰能買下最多台北地標？');
+    this.hud.say('選戰開始！\n投票日支持者最多的人當選！');
     await this.wait(1200);
     while (!this.gameOver) {
       await this.playTurn(this.players[this.current]);
@@ -578,6 +579,20 @@ class GameScene extends Phaser.Scene {
     return total;
   }
 
+  // 支持者增減：畫面上飄出藍色的「+300 支持」
+  changeFans(p, amount, silent = false) {
+    const before = p.fans;
+    p.fans = Math.max(0, p.fans + amount);
+    const diff = p.fans - before;
+    if (diff !== 0) {
+      const { x, y } = this.tokenPos(p);
+      this.floatText(x, y - 120, `${diff >= 0 ? '+' : '-'}${Math.abs(diff)} 支持`, diff >= 0 ? '#29adff' : '#ff77a8');
+      if (!silent) { if (diff >= 0) Sfx.tune([784, 988, 1175], 0.06); else Sfx.tune([392, 330], 0.1); }
+    }
+    this.hud.refreshPanels();
+    return diff;
+  }
+
   changeMoney(p, amount) {
     p.money += amount;
     const { x, y } = this.tokenPos(p);
@@ -672,7 +687,8 @@ class GameScene extends Phaser.Scene {
       this.refreshTile(i);
       Sfx.buy();
       this.flashTile(i);
-      this.hud.say(`${p.name} 買下了 ${t.name}！\n過路費 $${this.rentOf(i)}`);
+      const gain = this.changeFans(p, t.price * GAME_RULES.buyFansRate, true);
+      this.hud.say(`${p.name} 買下了 ${t.name}！\n支持者 +${gain}，過路費 $${this.rentOf(i)}`);
       this.hud.refreshPanels();
       await this.wait(1000);
     } else {
@@ -703,7 +719,8 @@ class GameScene extends Phaser.Scene {
       this.refreshTile(i);
       Sfx.buy();
       this.flashTile(i);
-      this.hud.say(`${t.name} 蓋好第 ${st.level} 層競選總部！\n過路費變成 $${this.rentOf(i)}`);
+      const gain = this.changeFans(p, t.price * GAME_RULES.buildFansRate, true);
+      this.hud.say(`${t.name} 蓋好第 ${st.level} 層競選總部！\n支持者 +${gain}，過路費變成 $${this.rentOf(i)}`);
       this.hud.refreshPanels();
       await this.wait(1100);
     }
@@ -736,6 +753,18 @@ class GameScene extends Phaser.Scene {
   }
 
   async applyCard(p, card) {
+    if (card.fans) {
+      this.changeFans(p, card.fans);
+      await this.wait(500);
+    }
+    if (card.fansFromEach) {
+      for (const o of this.players) {
+        if (o.id === p.id || o.bankrupt) continue;
+        const lost = -this.changeFans(o, -card.fansFromEach, true);
+        this.changeFans(p, lost);
+        await this.wait(300);
+      }
+    }
     if (card.money) {
       if (card.money > 0) this.changeMoney(p, card.money);
       else await this.pay(p, -card.money);

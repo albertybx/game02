@@ -52,14 +52,14 @@ class HudScene extends Phaser.Scene {
       const face = this.add.rectangle(8, 16, 56, 56, 0xfff1e8).setOrigin(0).setStrokeStyle(3, 0x000000);
       const img = addCharacter(this, 36, 44, i, 52);
       const name = this.add.text(70, 14, p.name, { fontFamily: FONT, fontSize: '20px', color: p.color, stroke: '#000', strokeThickness: 5 });
-      const tag = this.add.text(70, 42, p.human ? '玩家' : '電腦', { fontFamily: FONT, fontSize: '16px', color: '#c2c3c7' });
+      const tag = this.add.text(70, 42, '', { fontFamily: FONT, fontSize: '18px', color: '#7fd3ff' });
       const money = this.add.text(8, 78, '', { fontFamily: FONT, fontSize: '26px', color: '#ffec27' });
       const info = this.add.text(pw - 8, 84, '', { fontFamily: FONT, fontSize: '16px', color: '#fff1e8' }).setOrigin(1, 0);
       c.add([highlight, box, band, face, img, name, tag, money, info]);
       // 點玩家卡片：鏡頭移到那個角色
       box.setInteractive();
       box.on('pointerup', () => this.gs.followPlayer(p));
-      return { c, highlight, money, info };
+      return { c, highlight, money, info, fans: tag };
     });
     const top = MAP_VIEW.y + 10;
     this.roundChip = this.add.text(MAP_VIEW.x + 12, top, '', {
@@ -82,6 +82,7 @@ class HudScene extends Phaser.Scene {
       const pan = this.panels[i];
       const owned = gs.tileState.filter((s) => s.owner === i).length;
       pan.money.setText(p.bankrupt ? '破產' : `$${p.money}`);
+      pan.fans.setText(p.bankrupt ? '' : `支持 ${p.fans}`);
       pan.money.setColor(p.bankrupt ? '#ff004d' : p.money < 200 ? '#ff77a8' : '#ffec27');
       let status = `地${owned}`;
       if (p.skip > 0) status = '塞車中';
@@ -182,7 +183,8 @@ class HudScene extends Phaser.Scene {
     const gs = this.gs;
     this.refreshPanels();
     this.choiceLayer.removeAll(true);
-    const ranking = [...gs.players].sort((a, b) => (a.bankrupt - b.bankrupt) || (gs.assetsOf(b) - gs.assetsOf(a)));
+    // 排名：先比支持者，一樣多再比總資產；破產的排最後
+    const ranking = [...gs.players].sort((a, b) => (a.bankrupt - b.bankrupt) || (b.fans - a.fans) || (gs.assetsOf(b) - gs.assetsOf(a)));
     const winner = ranking[0];
     Music.want('victory');
 
@@ -201,7 +203,7 @@ class HudScene extends Phaser.Scene {
     ranking.forEach((p, k) => {
       const y = L.rankY + k * 70;
       layer.add(this.add.text(L.rankX, y, `${k + 1}. ${p.name}`, { fontFamily: FONT, fontSize: '32px', color: '#fff1e8' }));
-      layer.add(this.add.text(L.rankR, y, p.bankrupt ? '破產' : `總資產 $${gs.assetsOf(p)}`, { fontFamily: FONT, fontSize: '28px', color: p.bankrupt ? '#ff004d' : '#ffec27' }).setOrigin(1, 0));
+      layer.add(this.add.text(L.rankR, y, p.bankrupt ? '破產' : `支持者 ${p.fans}`, { fontFamily: FONT, fontSize: '28px', color: p.bankrupt ? '#ff004d' : '#ffec27' }).setOrigin(1, 0));
     });
 
     for (let k = 0; k < 60; k++) {
