@@ -158,3 +158,12 @@ function addHeadshot(scene, x, y, idx, size) {
   img.setPosition(x - cx * s + (size - cw * s) / 2, y - cy * s + (size - ch * s) / 2);
   return img;
 }
+
+// 打開網頁視窗（選戰指南、英文挑戰）時，暫停遊戲畫面的點擊，
+// 免得點視窗上的按鈕時，「穿透」按到底下遊戲的按鈕或建築
+function setGameInput(on) {
+  if (!window.__game) return;
+  const apply = () => window.__game.scene.getScenes(true).forEach((s) => { if (s.input) s.input.enabled = on; });
+  if (on) setTimeout(apply, 80); // 關視窗後稍等一下再打開，吃掉最後那一下點擊
+  else apply();
+}

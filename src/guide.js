@@ -23,7 +23,7 @@ function guideHTML() {
   return `
     <section>
       <h3>遊戲目標</h3>
-      <p>第 <b>${R.maxRounds}</b> 回合結束是<b>投票日</b>，<b>支持者最多</b>的候選人當選！
+      <p>最後一回合結束是<b>投票日</b>（回合數可以在首頁選：${ROUND_OPTIONS.join('、')} 回合），<b>支持者最多</b>的候選人當選！
       （支持者一樣多時，比總資產。）錢用光就會破產、退出選戰。</p>
     </section>
 
@@ -67,6 +67,13 @@ function guideHTML() {
       ${tile('chance', `機會（${TILES.filter((t) => t.type === 'chance').length} 格）`, `<p>抽一張機會卡，大多是好事：拿錢、支持者增加、前進、名人站台……</p>`)}
       ${tile('ballot', `命運（${TILES.filter((t) => t.type === 'fate').length} 格）`, `<p>抽一張命運卡，有好有壞：被爆料、失言被罵、颱風吹走看板……</p>`)}
       ${tile('talent', '政壇人物', `<p>遇到政壇前輩傳授選戰心法，支持者 + ${R.talentFans}。（之後會改成「招攬戰將」）</p>`)}
+      ${tile('quiz', '英文挑戰（首頁可選擇要不要加入）', `
+        <p>隨機出一題英文<b>選擇題</b>或<b>填空題</b>，單字和句型都有。程度可以在首頁選：國小、國中、高中、大學。</p>
+        <ul>
+          <li>答對：錢 <b>+$${R.quizMoney}</b>，支持者 + ${R.quizFans}。</li>
+          <li>答錯：支持者 - ${R.quizWrongFans}。</li>
+          <li>加入後，地圖上會有 ${QUIZ_TILE_SLOTS.length} 格英文挑戰（取代 1 格機會、1 格命運、1 格政壇人物）。</li>
+        </ul>`)}
       ${tile('jam', '塞車', '<p>下回合暫停一次。</p>')}
       ${tile('mrt', '捷運站', '<p>休息一下，吹吹冷氣，沒事發生。</p>')}
       ${tile('siren', '拖吊場', `<p>宣傳車被拖吊，罰款 $${R.towFine}。</p>`)}
@@ -84,6 +91,7 @@ function guideHTML() {
         <li><b>放大縮小</b>：右上角 ＋／－，手機可以兩指捏合，電腦可以用滑鼠滾輪。</li>
         <li><b>看建築資訊</b>：點一下建築，看價錢、地主、過路費、每回合帶來多少支持者。</li>
         <li><b>看某位玩家</b>：點他的狀態卡，鏡頭會移到他身上。</li>
+        <li><b>即時民調</b>：右上角的「圓餅／長條」按鈕可以切換圖表樣式。</li>
         <li><b>音樂</b>：右上角 ♪ 可以開關。</li>
       </ul>
     </section>`;
@@ -102,7 +110,8 @@ function showGuide() {
       <div class="g-body">${guideHTML()}</div>
     </div>`;
   document.body.appendChild(wrap);
-  const close = () => { wrap.remove(); Sfx.click(); };
+  setGameInput(false);
+  const close = () => { wrap.remove(); setGameInput(true); Sfx.click(); };
   wrap.querySelector('#g-close').addEventListener('click', close);
   // 點視窗外面的暗色區域也可以關
   wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });

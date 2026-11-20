@@ -8,7 +8,10 @@ const ISO_H = 64;           // 一格菱形的高
 const ORIGIN_X = 900;       // 地圖畫在世界座標的哪裡
 const ORIGIN_Y = 150;
 // 這些格子的 AI 圖本身就是一整塊地面，直接蓋在路上
-const FULL_TILE_TYPES = ['go', 'jam', 'mrt', 'tow', 'talent'];
+const FULL_TILE_TYPES = ['go', 'jam', 'mrt', 'tow', 'talent', 'quiz'];
+// 角色彈跳的高度（原本是 28 和 12，降低 40%）
+const HOP_WALK = 17;        // 走路每一步跳多高
+const HOP_IDLE = 7;         // 輪到自己時原地跳多高
 const LAND_MARGIN = 1;      // 路線外面留幾格陸地（越小，海岸線越貼著路線，地圖形狀越明顯）
 const UNOWNED_COLOR = 0x9a9aa6;  // 還沒人買的地：灰色
 const SHOW_BUILDING_NAMES = false; // 要不要在建築下面顯示名字
@@ -19,6 +22,12 @@ class GameScene extends Phaser.Scene {
   init(data) {
     this.playerCount = data.playerCount || 4;
     this.mode = data.mode || 'cpu';
+    // 首頁選的回合數、要不要加入英文挑戰格、測驗程度
+    if (data.rounds) GAME_RULES.maxRounds = data.rounds;
+    this.quizOn = !!data.quiz;
+    this.quizLevel = data.quizLevel || 'junior';
+    applyTileOptions({ quiz: this.quizOn });
+    QuizDeck.reset();
     this.round = 1;
     this.current = 0;
     this.gameOver = false;
@@ -448,7 +457,7 @@ class GameScene extends Phaser.Scene {
   followPlayer(p) {
     const cam = this.cameras.main;
     const o = this.followOffset();
-    cam.startFollow(this.tokens[p.id], true, 0.12, 0.12, o.x, o.y);
+    cam.startFollow(this.anchors[p.id], true, 0.12, 0.12, o.x, o.y);
   }
 
   // 放大縮小（按鈕、兩指、滑鼠滾輪都用這個）
@@ -473,6 +482,8 @@ class GameScene extends Phaser.Scene {
   }
 
   createTokens() {
+    // 每個角色有一個看不見的「定位點」：只沿著路平滑移動、不會彈跳，鏡頭跟著它走
+    this.anchors = this.players.map((p) => ({ ...this.tokenPos(p) }));
     this.tokens = this.players.map((p) => {
       const { x, y } = this.tokenPos(p);
       const shadow = this.add.ellipse(x, y, 34, 12, 0x000000, 0.35);
@@ -566,7 +577,8 @@ class GameScene extends Phaser.Scene {
     this.tweens.killTweensOf(t);
     const { x, y } = this.tokenPos(p);
     t.setPosition(x, y);
-    this.tweens.add({ targets: t, y: y - 12, duration: 160, yoyo: true, repeat: 2, ease: 'Stepped', easeParams: [2] });
+    Object.assign(this.anchors[p.id], { x, y });
+    this.tweens.add({ targets: t, y: y - HOP_IDLE, duration: 160, yoyo: true, repeat: 2, ease: 'Stepped', easeParams: [2] });
   }
 
   // 一格一格跳（steps 可以是負的 = 後退）
@@ -584,7 +596,11 @@ class GameScene extends Phaser.Scene {
       Sfx.hop();
       t.shadow.setPosition(x, y).setDepth(y + 29);
       t.setDepth(Math.max(t.depth, y + 30));
-      await this.tweenP({ targets: t, x: (t.x + x) / 2, y: Math.min(t.y, y) - 28, duration: 110, ease: 'Quad.easeOut' });
+      // 定位點平滑地滑到下一格（鏡頭跟著它），角色本身另外做彈跳
+      const anchor = this.anchors[p.id];
+      this.tweens.killTweensOf(anchor);
+      this.tweens.add({ targets: anchor, x, y, duration: 220 });
+      await this.tweenP({ targets: t, x: (t.x + x) / 2, y: Math.min(t.y, y) - HOP_WALK, duration: 110, ease: 'Quad.easeOut' });
       await this.tweenP({ targets: t, x, y, duration: 110, ease: 'Quad.easeIn' });
       t.setDepth(y + 30);
       if (dir > 0 && p.pos === 0) {
@@ -719,6 +735,9 @@ class GameScene extends Phaser.Scene {
           await this.wait(1000);
         } else await this.payRent(p, i);
         break;
+      case 'quiz':
+        await this.doQuiz(p);
+        break;
       case 'talent':
         // 戰將功能做好前的暫時效果
         this.hud.say(`${p.name} 遇到政壇前輩，\n傳授選戰心法！`);
@@ -824,6 +843,24 @@ class GameScene extends Phaser.Scene {
       this.changeFans(owner, lost);
     }
     await this.wait(900);
+  }
+
+  // ---------- 英文挑戰 ----------
+  async doQuiz(p) {
+    const level = QUIZ_LEVELS.find((lv) => lv.key === this.quizLevel) || QUIZ_LEVELS[1];
+    this.hud.say(`${p.name} 遇到英文挑戰！\n答對：$${GAME_RULES.quizMoney}、支持者 +${GAME_RULES.quizFans}`);
+    Sfx.tune([523, 659, 784], 0.08);
+    await this.wait(700);
+    const ok = await showQuiz(QuizDeck.draw(level.key), p, level.name);
+    if (ok) {
+      this.hud.say(`${p.name} 答對了！\n錢 +$${GAME_RULES.quizMoney}，支持者 +${GAME_RULES.quizFans}`);
+      this.changeMoney(p, GAME_RULES.quizMoney);
+      this.changeFans(p, GAME_RULES.quizFans, true);
+    } else {
+      this.hud.say(`${p.name} 答錯了…\n支持者 -${GAME_RULES.quizWrongFans}`);
+      this.changeFans(p, -GAME_RULES.quizWrongFans);
+    }
+    await this.wait(1000);
   }
 
   // ---------- 機會 / 命運 ----------
