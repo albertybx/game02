@@ -272,17 +272,7 @@ class GameScene extends Phaser.Scene {
         ic = this.add.image(x, y + 6, this.textures.exists(t.icon) ? t.icon : 'chance').setOrigin(0.5, 1).setScale(3);
       }
       ic.setDepth(y - 10);
-      this.add.text(x, y + 12, t.name, {
-        fontFamily: FONT, fontSize: '20px', color: '#ffffff', stroke: '#000000', strokeThickness: 6,
-      }).setOrigin(0.5, 0).setDepth(y + 200);
     });
-    // 道路中線虛線（畫在相鄰兩格中間）
-    g.fillStyle(0xffec27, 1);
-    for (let i = 0; i < TILES.length; i++) {
-      const a = this.tileCenter(i);
-      const b = this.tileCenter((i + 1) % TILES.length);
-      g.fillRect((a.x + b.x) / 2 - 6, (a.y + b.y) / 2 - 2, 12, 4);
-    }
   }
 
   drawLots() {
@@ -312,12 +302,8 @@ class GameScene extends Phaser.Scene {
       }
       bld.setDepth(y + 20);
 
-      // 里長格：在地上標出行政區名字，看地圖就知道在哪一區
-      if (t.type === 'chief') {
-        this.add.text(x, y + 14, t.district, {
-          fontFamily: FONT, fontSize: '16px', color: '#ffffff', backgroundColor: '#1d2b53cc', padding: { x: 4, y: 1 },
-        }).setOrigin(0.5, 0).setDepth(y + 21); // 在建築前面、但在路上的角色後面
-      } else if (SHOW_BUILDING_NAMES) {
+      // 地圖上不顯示名字（角色踩到哪一格，畫面上方會顯示那一格的名字）
+      if (SHOW_BUILDING_NAMES) {
         this.add.text(x, y + 22, t.name, {
           fontFamily: FONT, fontSize: '18px', color: '#ffffff', backgroundColor: '#1d2b53', padding: { x: 6, y: 2 },
         }).setOrigin(0.5, 0).setDepth(y + 300);
@@ -546,6 +532,7 @@ class GameScene extends Phaser.Scene {
     this.hud.refreshPanels();
     this.followPlayer(p);
     this.bounceToken(p);
+    this.hud.showTile(p.pos, p);
 
     // 【A】每回合開始，自己的地標和里長會帶來支持者
     const income = this.fansIncomeOf(p);
@@ -590,6 +577,7 @@ class GameScene extends Phaser.Scene {
     this.followPlayer(p);
     for (let k = 0; k < Math.abs(steps); k++) {
       p.pos = (p.pos + dir + TILES.length) % TILES.length;
+      this.hud.showTile(p.pos, p);
       const { x, y } = this.tokenPos(p);
       // 往左走時角色轉向
       t.setFlipX(x < t.x);
@@ -780,6 +768,7 @@ class GameScene extends Phaser.Scene {
       p.money -= t.price;
       this.tileState[i].owner = p.id;
       this.refreshTile(i);
+      this.hud.showTile(i, p);
       Sfx.buy();
       this.flashTile(i);
       const gain = this.changeFans(p, t.type === 'chief' ? GAME_RULES.chiefBuyFans : Math.round(t.price * GAME_RULES.buyFansRate), true);

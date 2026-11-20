@@ -371,6 +371,25 @@ const ART = {
     '................',
   ],
 
+  coin: [ // 金幣（玩家卡片上的錢）
+    '................',
+    '.....kkkkkk.....',
+    '...kkooooookk...',
+    '..koyyyyyyyyok..',
+    '.koyywwyyyyyyok.',
+    '.koywyyyyyyyyok.',
+    'koywyyyyyyyyyyok',
+    'koyyyyyooyyyyyok',
+    'koyyyyyooyyyyyok',
+    'koyyyyyyyyyyyyok',
+    '.koyyyyyyyyyyok.',
+    '.koyyyyyyyyyyok.',
+    '..kooyyyyyyook..',
+    '...kkooooookk...',
+    '.....kkkkkk.....',
+    '................',
+  ],
+
   // ===== 角色（H 頭髮 / S 西裝 / T 領帶 會換成角色自己的顏色） =====
   person_short: [
     '................',

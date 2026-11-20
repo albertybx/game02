@@ -140,3 +140,21 @@ function addIcon(scene, x, y, icon, height) {
   img.setScale(height / img.height);
   return img;
 }
+
+// 大頭照：只顯示角色圖的頭部，縮放到 size x size 的方框裡（左上角在 x, y）
+// AI 角色圖的頭在上面約 45%；像素小圖的頭在第 1～8 行
+const HEAD_CROP = { ai: { x: 0.12, y: 0.0, w: 0.76, h: 0.46 }, pixel: { x: 3 / 16, y: 0, w: 10 / 16, h: 8 / 16 } };
+function addHeadshot(scene, x, y, idx, size) {
+  const ai = scene.textures.exists(`charimg${idx}`);
+  const img = scene.add.image(0, 0, ai ? `charimg${idx}` : `char${idx}`).setOrigin(0, 0);
+  const r = ai ? HEAD_CROP.ai : HEAD_CROP.pixel;
+  const cx = img.width * r.x;
+  const cy = img.height * r.y;
+  const cw = img.width * r.w;
+  const ch = img.height * r.h;
+  img.setCrop(cx, cy, cw, ch);
+  const s = size / Math.max(cw, ch);
+  img.setScale(s);
+  img.setPosition(x - cx * s + (size - cw * s) / 2, y - cy * s + (size - ch * s) / 2);
+  return img;
+}

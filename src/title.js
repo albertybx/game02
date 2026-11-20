@@ -65,7 +65,7 @@ class TitleScene extends Phaser.Scene {
       onClick: () => this.scene.start('game', { playerCount: this.playerCount, mode: this.mode }),
     });
 
-    this.add.text(W / 2, L.hint, '右上角 ♪ 可以開關音樂', { fontFamily: FONT, fontSize: '20px', color: '#83769c' }).setOrigin(0.5);
+    makeButton(this, W / 2, L.hint + 18, 220, 52, '選戰指南', { fill: 0xffec27, fontSize: '24px', onClick: () => showGuide() });
     // 版本號（確認是不是最新版用）
     this.add.text(12, 12, `版本 ${window.GAME_VERSION || ''}`, { fontFamily: FONT, fontSize: '18px', color: '#83769c' });
     this.refresh();
