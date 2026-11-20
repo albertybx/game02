@@ -45,8 +45,17 @@ const Sfx = {
       this.bus.connect(this.master);
       Music.init(this.ctx, this.master);     // 背景音樂（music.js）
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx.state !== 'running') this.ctx.resume();
+    // iPhone：要在點擊的當下真的播一個（無聲的）聲音，音效系統才會被啟動
+    const buf = this.ctx.createBuffer(1, 1, 22050);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.ctx.destination);
+    src.start(0);
+    // iPhone 靜音開關：把網頁聲音當成「媒體播放」，靜音開關打開時也聽得到（iOS 17 以後）
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 不支援就算了 */ }
   },
+  get ready() { return !!this.ctx && this.ctx.state === 'running'; },
   beep(freq = 440, dur = 0.06, type = 'square', vol = 0.06, delay = 0) {
     if (this.muted || !this.ctx) return;
     const t = this.ctx.currentTime + delay;

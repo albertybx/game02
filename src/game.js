@@ -40,7 +40,6 @@ class GameScene extends Phaser.Scene {
   create() {
     this.cameras.main.setBackgroundColor(0x4a7fb5);
     Music.want('game');
-    this.input.on('pointerdown', () => Sfx.unlock());
     this.drawWater();
     this.drawGround();
     this.drawRoad();
