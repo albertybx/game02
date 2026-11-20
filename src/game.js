@@ -212,8 +212,9 @@ class GameScene extends Phaser.Scene {
       // 建築：有 AI 畫的圖就用，沒有就用像素小圖
       let bld;
       if (this.textures.exists(`bld_${t.icon}`)) {
-        bld = this.add.image(x, y + 18, `bld_${t.icon}`).setOrigin(0.5, 1);
-        bld.setScale(ISO_W * 0.95 / bld.width);
+        // AI 圖的底部是一塊菱形地面，對齊空地的菱形
+        bld = this.add.image(x, y + ISO_H / 2 - 2, `bld_${t.icon}`).setOrigin(0.5, 1);
+        bld.setScale((ISO_W - 6) / bld.width);
       } else {
         bld = this.add.image(x, y + 14, t.icon).setOrigin(0.5, 1).setScale(t.icon === 'taipei101' ? 7 : 5.5);
       }
