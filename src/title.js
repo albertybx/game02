@@ -17,6 +17,7 @@ class TitleScene extends Phaser.Scene {
     const v = `?v=${window.GAME_VERSION || ''}`; // 版本號：更新後瀏覽器會重新下載圖片
     for (const [key, path] of Object.entries(BUILDING_IMAGES)) this.load.image(`bld_${key}`, path + v);
     CHARACTERS.forEach((ch, i) => { if (ch.image) this.load.image(`charimg${i}`, ch.image + v); });
+    GENERALS.forEach((g) => this.load.image(`genimg${g.id}`, g.image + v));
     this.load.on('loaderror', (file) => console.warn('圖片載入失敗：', file.src));
   }
 

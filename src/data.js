@@ -22,7 +22,6 @@ const GAME_RULES = {
   chiefSteal: 80,       // 【B】對手踩到你的里長格：倒戈 80 位支持者
   chiefRentRate: 0.1,   // 里長格過路費：價錢 × 0.1
 
-  talentFans: 150,      // 政壇人物格（戰將功能做好前的暫時效果）：支持者 + 150
 
   // ---- 特殊挑戰：英文學習格（首頁可以選擇要不要加入）----
   quizMoney: 200,        // 答對：錢 + 200（大幅）
@@ -46,7 +45,7 @@ const MAP_ROUTE = [
 ];
 
 // 地圖 36 格，從「起點」（台北車站旁）出發。
-// type: go 起點 / property 地標 / chief 里長 / chance 機會 / fate 命運 / talent 政壇人物
+// type: go 起點 / property 地標 / chief 里長 / chance 機會 / fate 命運 / talent 戰將招募站
 //       / jam 塞車 / mrt 捷運站 / tow 拖吊場
 const TILES = [
   { type: 'go',       name: '起點',         icon: 'go' },
@@ -62,7 +61,7 @@ const TILES = [
   { type: 'property', name: '國父紀念館',   icon: 'sunyatsen',    price: 220, district: '信義區' },
   { type: 'chief',    name: '信義區里長',   icon: 'chief',        price: 140, district: '信義區' },
   { type: 'property', name: '台北101',      icon: 'taipei101',    price: 350, district: '信義區' },
-  { type: 'talent',   name: '政壇人物',     icon: 'talent' },
+  { type: 'talent',   name: '戰將招募站',   icon: 'talent' },
   { type: 'chief',    name: '南港區里長',   icon: 'chief',        price: 90,  district: '南港區' },
   { type: 'chance',   name: '機會',         icon: 'chance' },
   { type: 'chief',    name: '內湖區里長',   icon: 'chief',        price: 110, district: '內湖區' },
@@ -79,7 +78,7 @@ const TILES = [
   { type: 'tow',      name: '拖吊場',       icon: 'siren' },
   { type: 'property', name: '北投溫泉',     icon: 'beitou',       price: 120, district: '北投區' },
   { type: 'chief',    name: '北投區里長',   icon: 'chief',        price: 90,  district: '北投區' },
-  { type: 'talent',   name: '政壇人物',     icon: 'talent' },
+  { type: 'talent',   name: '戰將招募站',   icon: 'talent' },
   { type: 'chief',    name: '大同區里長',   icon: 'chief',        price: 80,  district: '大同區' },
   { type: 'fate',     name: '命運',         icon: 'ballot' },
   { type: 'property', name: '西門紅樓',     icon: 'redhouse',     price: 60,  district: '萬華區' },
@@ -89,7 +88,7 @@ const TILES = [
 
 // 加入「英文挑戰」時，把下面這幾格換成英文挑戰格（散在地圖的南、東、西北）
 const QUIZ_TILE = { type: 'quiz', name: '英文挑戰', icon: 'quiz' };
-const QUIZ_TILE_SLOTS = [7, 15, 30]; // 原本是：命運、機會、政壇人物
+const QUIZ_TILE_SLOTS = [7, 15, 32]; // 原本是：命運、機會、命運（兩個戰將招募站都保留）
 const BASE_TILES = TILES.map((t) => ({ ...t }));
 
 // 開新遊戲時依首頁的選項重新排地圖格子（TILES 會被改成這一場用的版本）
@@ -97,6 +96,57 @@ function applyTileOptions({ quiz }) {
   TILES.length = 0;
   BASE_TILES.forEach((t, i) => TILES.push(quiz && QUIZ_TILE_SLOTS.includes(i) ? { ...QUIZ_TILE } : { ...t }));
 }
+
+// =====================================================================
+// 戰將：可以在「戰將招募站」招攬，幫你派任務、駐守里長格、拔對手的樁
+// 三項能力（1～5）：口才、人脈、魅力，加起來都是 9 點，各有專長。
+// home 是出身的行政區：在家鄉出任務、拔樁、駐守都會 +1。
+// ※ 目前是虛構角色；想換成別的人物，改 name、title、能力和 image 就好。
+// =====================================================================
+const GENERALS = [
+  { id: 0, name: '林語辰', title: '網紅律師',   eloquence: 5, network: 1, charisma: 3, home: '大安區', image: 'assets/generals/gen0.png' },
+  { id: 1, name: '金水伯', title: '廟口主委',   eloquence: 2, network: 5, charisma: 2, home: '萬華區', image: 'assets/generals/gen1.png' },
+  { id: 2, name: '阿芳姐', title: '市場阿姨',   eloquence: 2, network: 4, charisma: 3, home: '大同區', image: 'assets/generals/gen2.png' },
+  { id: 3, name: '小傑',   title: '科技新貴',   eloquence: 3, network: 2, charisma: 4, home: '內湖區', image: 'assets/generals/gen3.png' },
+  { id: 4, name: '蔡大嘴', title: '電視名嘴',   eloquence: 4, network: 2, charisma: 3, home: '松山區', image: 'assets/generals/gen4.png' },
+  { id: 5, name: '小安',   title: '志工隊長',   eloquence: 3, network: 3, charisma: 3, home: '文山區', image: 'assets/generals/gen5.png' },
+  { id: 6, name: '陳醫師', title: '社區醫師',   eloquence: 3, network: 4, charisma: 2, home: '北投區', image: 'assets/generals/gen6.png' },
+  { id: 7, name: '莉莉',   title: '前奧運國手', eloquence: 1, network: 3, charisma: 5, home: '士林區', image: 'assets/generals/gen7.png' },
+];
+
+const GENERAL_RULES = {
+  maxPerPlayer: 2,        // 每人最多幾位戰將
+  recruitCost: 300,       // 招募費
+  recruitChoices: 2,      // 招募站一次翻幾張
+  startLoyalty: 80,       // 剛加入時的忠誠度
+  poachBelow: 60,         // 忠誠度低於多少，就可能被挖角
+  poachCost: 400,         // 挖角要付的錢（成功才付）
+  // 任務（在自己的里長格派出）：支持者 + 基本 + 能力 × 倍數 + 骰子 × 10
+  missionBase: 60,
+  missionPerStat: 30,
+  mediaCost: 100,         // 媒體宣傳要花的錢（效果比較大）
+  mediaBonus: 1.5,        // 媒體宣傳的效果倍數
+  missionRest: 1,         // 出完任務休息幾回合
+  // 拔樁戰
+  counterBonus: 2,        // 出的招剋到對方 +2
+  homeBonus: 1,           // 在出身區 +1
+  winFans: 150,           // 拔樁成功：支持者 +
+  loseFans: 150,          // 拔樁失敗：支持者倒戈給對手
+  loseRest: 2,            // 輸了的戰將休息幾回合
+  stakeMax: 4,            // 樁腳穩固度最高
+  stakeEvery: 3,          // 擁有幾回合，穩固度 +1
+  // 忠誠度變化
+  loyaltyMission: 3, loyaltyWin: 8, loyaltyLose: 12, loyaltyScandal: 15, loyaltyIdle: 4, idleTurns: 3,
+  scandalFans: 150,       // 醜聞：支持者 -
+  scandalRest: 2,
+};
+
+// 拔樁戰的三種招式：用哪一項能力、剋哪一招
+const TACTICS = {
+  speech: { name: '演講', stat: 'eloquence', statName: '口才', beats: 'rally' },   // 講道理壓過熱鬧
+  visit:  { name: '拜訪', stat: 'network',   statName: '人脈', beats: 'speech' },  // 人情勝過空談
+  rally:  { name: '造勢', stat: 'charisma',  statName: '魅力', beats: 'visit' },   // 人氣蓋過人情
+};
 
 // 角色：目前是虛構的「政治人物」角色。
 // 想換成真實政治人物，改 name 就好。image 是 AI 畫的角色圖；沒有 image 時用像素小圖（body 可選 person_short / person_long / person_bald）。
@@ -129,6 +179,7 @@ const CHANCE_CARDS = [
   { text: '名人站台力挺！\n支持者 +400', fans: 400 },
   { text: '舉辦親子園遊會，花 $100，\n支持者 +250', money: -100, fans: 250 },
   { text: '辯論會大獲全勝！\n每位對手有 100 位支持者倒戈', fansFromEach: 100 },
+  { text: '戰將們士氣大振！\n你所有戰將的忠誠度 +15', loyaltyAll: 15 },
 ];
 
 const FATE_CARDS = [
@@ -144,6 +195,8 @@ const FATE_CARDS = [
   { text: '造勢晚會遇到大雨，花 $80，\n支持者 -100', money: -80, fans: -100 },
   { text: '被假消息抹黑，\n支持者 -150', fans: -150 },
   { text: '幫鄰居修路有功，口碑變好，\n支持者 +150', fans: 150 },
+  { text: '戰將醜聞！', scandal: true },
+  { text: '戰將醜聞！', scandal: true },
 ];
 
 // AI 畫的建築圖：把圖片放到 assets/buildings/ 資料夾，再在這裡登記。
@@ -163,7 +216,7 @@ const BUILDING_IMAGES = {
   presidential: 'assets/buildings/presidential.png',
   taipei101: 'assets/buildings/taipei101.png',
   chief: 'assets/buildings/chief.png',     // 里長辦公處（12 區共用）
-  talent: 'assets/buildings/talent.png',   // 政壇人物格（造勢小舞台）
+  talent: 'assets/buildings/talent.png',   // 戰將招募站（造勢小舞台）
   quiz: 'assets/buildings/quiz.png',       // 英文挑戰格（小黑板和書）
   // 路上的格子和道具
   go: 'assets/buildings/go.png',

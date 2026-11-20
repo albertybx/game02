@@ -11,6 +11,7 @@ function guideImg(name) {
 function guideHTML() {
   const R = GAME_RULES;
   const props = TILES.filter((t) => t.type === 'property');
+  const GR = GENERAL_RULES;
   const chiefs = TILES.filter((t) => t.type === 'chief');
   const range = (list) => `$${Math.min(...list.map((t) => t.price))}～$${Math.max(...list.map((t) => t.price))}`;
   const pct = (x) => `${Math.round(x * 100)}%`;
@@ -62,21 +63,44 @@ function guideHTML() {
           <li>每回合：帶來 ${R.chiefFansPerTurn} 位支持者。</li>
           <li>不能蓋競選總部。</li>
           <li>對手踩到：付價錢 ${pct(R.chiefRentRate)} 的過路費，${R.chiefSteal} 位支持者倒戈。</li>
+          <li>走到<b>自己的</b>里長：可以派戰將出任務，或留下來駐守。</li>
+          <li>走到<b>對手的</b>里長：付完過路費，可以派戰將<b>拔樁</b>，搶下這一格。</li>
         </ul>`)}
       ${tile('go', '起點', `<p>經過或停在起點，領 $${R.passGoBonus}。</p>`)}
       ${tile('chance', `機會（${TILES.filter((t) => t.type === 'chance').length} 格）`, `<p>抽一張機會卡，大多是好事：拿錢、支持者增加、前進、名人站台……</p>`)}
       ${tile('ballot', `命運（${TILES.filter((t) => t.type === 'fate').length} 格）`, `<p>抽一張命運卡，有好有壞：被爆料、失言被罵、颱風吹走看板……</p>`)}
-      ${tile('talent', '政壇人物', `<p>遇到政壇前輩傳授選戰心法，支持者 + ${R.talentFans}。（之後會改成「招攬戰將」）</p>`)}
+      ${tile('talent', `戰將招募站（${TILES.filter((t) => t.type === 'talent').length} 格）`, `<p>翻 ${GR.recruitChoices} 張戰將卡，挑 1 位花 $${GR.recruitCost} 招募，也可以不要。每人最多 ${GR.maxPerPlayer} 位，滿了可以請一位離隊換人。對手忠誠度低於 ${GR.poachBelow} 的戰將，也可以在這裡<b>挖角</b>（成功才付 $${GR.poachCost}）。</p>`)}
       ${tile('quiz', '英文挑戰（首頁可選擇要不要加入）', `
         <p>隨機出一題英文<b>選擇題</b>或<b>填空題</b>，單字和句型都有。程度可以在首頁選：國小、國中、高中、大學。</p>
         <ul>
           <li>答對：錢 <b>+$${R.quizMoney}</b>，支持者 + ${R.quizFans}。</li>
           <li>答錯：支持者 - ${R.quizWrongFans}。</li>
-          <li>加入後，地圖上會有 ${QUIZ_TILE_SLOTS.length} 格英文挑戰（取代 1 格機會、1 格命運、1 格政壇人物）。</li>
+          <li>加入後，地圖上會有 ${QUIZ_TILE_SLOTS.length} 格英文挑戰（取代 1 格機會、2 格命運）。</li>
         </ul>`)}
       ${tile('jam', '塞車', '<p>下回合暫停一次。</p>')}
       ${tile('mrt', '捷運站', '<p>休息一下，吹吹冷氣，沒事發生。</p>')}
       ${tile('siren', '拖吊場', `<p>宣傳車被拖吊，罰款 $${R.towFine}。</p>`)}
+    </section>
+
+    <section>
+      <h3>戰將</h3>
+      <p>戰將有三項能力（1～5）：<b>口才</b>、<b>人脈</b>、<b>魅力</b>，還有出身的行政區（在家鄉做事 +${GR.homeBonus}）。右上角「戰將」按鈕可以看各陣營的戰將。</p>
+      <p><b>在自己的里長格派任務</b>（出完任務休息 ${GR.missionRest} 回合）：</p>
+      <ul>
+        <li>跑紅白帖：看魅力，不花錢。</li>
+        <li>選民服務：看人脈，這一格的樁腳更穩，比較不容易被拔。</li>
+        <li>媒體宣傳：看口才，花 $${GR.mediaCost}，效果 ×${GR.mediaBonus}。</li>
+        <li>駐守：戰將留在這格，對手來拔樁時由他防守。駐守時要選一個「防守風格」（他最常出的招），對手看得到。</li>
+      </ul>
+      <p><b>拔樁戰</b>（在對手的里長格）：三戰兩勝，每輪雙方各出一招。</p>
+      <ul>
+        <li>演講（口才）剋 造勢；造勢（魅力）剋 拜訪；拜訪（人脈）剋 演講。</li>
+        <li>分數 = 能力 + 骰子（1～6）+ 剋到對方 ${GR.counterBonus} + 在家鄉 ${GR.homeBonus}。平手算守方贏。</li>
+        <li>沒有戰將駐守時，由「地方樁腳」防守：三項能力都等於<b>穩固度</b>。剛拉攏時是 1，每擁有 ${GR.stakeEvery} 回合 +1，最多 ${GR.stakeMax}（樁腳越老越穩）。</li>
+        <li>出戰前會顯示<b>勝算</b>。成功：搶下這格，支持者 + ${GR.winFans}。失敗：${GR.loseFans} 位支持者倒戈給對手，戰將休息 ${GR.loseRest} 回合。</li>
+      </ul>
+      <p><b>忠誠度</b>：一開始 ${GR.startLoyalty}。出任務、打贏會上升；打輸、鬧醜聞、太久沒事做會下降。低於 ${GR.poachBelow} 就可能被對手挖角。</p>
+      <p><b>戰將醜聞</b>（命運卡）：隨機一位戰將出包，暫停活動 ${GR.scandalRest} 回合，支持者 - ${GR.scandalFans}。</p>
     </section>
 
     <section>
