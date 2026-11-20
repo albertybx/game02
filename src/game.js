@@ -10,6 +10,8 @@ const ORIGIN_Y = 150;
 // 這些格子的 AI 圖本身就是一整塊地面，直接蓋在路上
 const FULL_TILE_TYPES = ['go', 'jam', 'mrt', 'tow', 'talent', 'quiz'];
 // 角色彈跳的高度（原本是 28 和 12，降低 40%）
+const CAM_SMOOTH_MS = 70;   // 鏡頭追上角色的速度（毫秒，越小追越快）
+const STEP_MS = 200;        // 角色走一格花多久（毫秒）
 const HOP_WALK = 17;        // 走路每一步跳多高
 const HOP_IDLE = 7;         // 輪到自己時原地跳多高
 const LAND_MARGIN = 1;      // 路線外面留幾格陸地（越小，海岸線越貼著路線，地圖形狀越明顯）
@@ -47,6 +49,11 @@ class GameScene extends Phaser.Scene {
     }
     this.chanceDeck = [];
     this.fateDeck = [];
+    this.history = []; // 民調紀錄：[{ round, who, fans: [每位玩家的支持者] }]，結算畫面的趨勢報告用
+  }
+
+  recordPoll(who = null) {
+    this.history.push({ round: this.round, who, fans: this.players.map((p) => (p.bankrupt ? 0 : p.fans)) });
   }
 
   create() {
@@ -57,6 +64,7 @@ class GameScene extends Phaser.Scene {
     this.drawGround();
     this.drawRoad();
     this.drawLots();
+    this.bakeStatic();
     TILES.forEach((t, i) => this.refreshTile(i));
     this.drawTrees();
     this.createTokens();
@@ -150,6 +158,30 @@ class GameScene extends Phaser.Scene {
     this.board = { path, land, inside, lots, park, taken, minC, maxC, minR, maxR, key };
   }
 
+  // 把收集到的「不會動的地面」畫進一張大圖，然後刪掉原本的一百多個小物件
+  bakeStatic() {
+    const list = this.staticParts || [];
+    if (!list.length) return;
+    const pts = [...this.board.land].map((k) => { const [c, r] = k.split(',').map(Number); return this.iso(c, r); });
+    const x0 = Math.floor(Math.min(...pts.map((q) => q.x)) - ISO_W);
+    const y0 = Math.floor(Math.min(...pts.map((q) => q.y)) - ISO_H);
+    const w = Math.ceil(Math.max(...pts.map((q) => q.x)) + ISO_W - x0);
+    const h = Math.ceil(Math.max(...pts.map((q) => q.y)) + ISO_H + 60 - y0);
+    const rt = this.add.renderTexture(x0, y0, w, h).setOrigin(0).setDepth(-900);
+    // 照原本的前後順序畫
+    list.sort((a, b) => a.depth - b.depth);
+    for (const o of list) rt.draw(o, -x0, -y0);
+    rt.render();
+    for (const o of list) o.destroy();
+    this.staticParts = [];
+  }
+
+  // 記下一個「不會動的地面」物件，等一下合成進大圖
+  keepStatic(o) {
+    (this.staticParts = this.staticParts || []).push(o);
+    return o;
+  }
+
   // ---------- 座標 ----------
   // 第 i 格在地圖上的 (col,row)
   ringCell(i) {
@@ -205,8 +237,8 @@ class GameScene extends Phaser.Scene {
 
   drawGround() {
     const { land, key, park } = this.board;
-    const g = this.add.graphics().setDepth(-900);
-    const sides = this.add.graphics().setDepth(-950);
+    const g = this.keepStatic(this.add.graphics().setDepth(-900));
+    const sides = this.keepStatic(this.add.graphics().setDepth(-950));
     const rnd = new Phaser.Math.RandomDataGenerator(['grass']);
     const textured = this.textures.exists('bld_grass_tile');
     for (const k of land) {
@@ -225,7 +257,7 @@ class GameScene extends Phaser.Scene {
         sides.fillStyle(0x9e9e9e, 1).fillPoints([L, B, { x: B.x, y: B.y + 8 }, { x: L.x, y: L.y + 8 }], true);
       }
       if (textured) {
-        this.add.image(x, y, 'bld_grass_tile').setDepth(-899);
+        this.keepStatic(this.add.image(x, y, 'bld_grass_tile').setDepth(-899));
         continue;
       }
       this.diamond(g, x, y, ISO_W, ISO_H, (col + row) % 2 === 0 ? 0x5fb34a : 0x56a843);
@@ -248,14 +280,14 @@ class GameScene extends Phaser.Scene {
   }
 
   drawRoad() {
-    const g = this.add.graphics().setDepth(-800);
+    const g = this.keepStatic(this.add.graphics().setDepth(-800));
     this.roadMarkers = [];
     TILES.forEach((t, i) => {
       const { x, y } = this.tileCenter(i);
       const special = FULL_TILE_TYPES.includes(t.type);
       // 路面：有 AI 柏油路就用，沒有就畫灰色菱形
       if (this.textures.exists('bld_road_tile')) {
-        this.add.image(x, y, 'bld_road_tile').setDepth(-801);
+        this.keepStatic(this.add.image(x, y, 'bld_road_tile').setDepth(-801));
         this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30, 0.5);
       } else {
         this.diamond(g, x, y + 4, ISO_W, ISO_H, 0x3b3b44);
@@ -286,7 +318,7 @@ class GameScene extends Phaser.Scene {
 
   drawLots() {
     this.lotOverlays = [];
-    const g = this.add.graphics().setDepth(-700);
+    const g = this.keepStatic(this.add.graphics().setDepth(-700));
     TILES.forEach((t, i) => {
       if (t.type !== 'property' && t.type !== 'chief') return;
       const cell = this.lotCell(i);
@@ -294,7 +326,7 @@ class GameScene extends Phaser.Scene {
       const { x, y } = this.iso(cell.col, cell.row);
       // 空地：人行磚（有 AI 地磚就用）
       if (this.textures.exists('bld_plaza_tile')) {
-        this.add.image(x, y, 'bld_plaza_tile').setDepth(-701).setScale((ISO_W - 8) / ISO_W);
+        this.keepStatic(this.add.image(x, y, 'bld_plaza_tile').setDepth(-701).setScale((ISO_W - 8) / ISO_W));
       } else {
         this.diamond(g, x, y, ISO_W - 8, ISO_H - 4, 0xd9cbb0);
       }
@@ -437,7 +469,7 @@ class GameScene extends Phaser.Scene {
       const dy = p.y - this.dragStart.y;
       if (!this.dragging && Math.hypot(dx, dy) < 12) return;
       this.dragging = true;
-      cam.stopFollow();
+      this.stopFollow();
       cam.setScroll(this.dragStart.sx - dx / cam.zoom, this.dragStart.sy - dy / cam.zoom);
     });
     this.input.on('pointerup', () => { this.dragStart = null; this.pinch = null; });
@@ -454,20 +486,33 @@ class GameScene extends Phaser.Scene {
     return { x: cx / z, y: cy / z };
   }
 
+  // 鏡頭跟著某位玩家的定位點（每一幀在 update() 裡追過去）
   followPlayer(p) {
+    this.camTarget = this.anchors[p.id];
+  }
+
+  stopFollow() {
+    this.camTarget = null;
+  }
+
+  // 每一幀：鏡頭往目標靠近。用「經過的時間」計算靠近多少，
+  // 手機畫面比較卡（每秒幀數少）時，鏡頭也一樣準時跟上，不會慢半拍
+  update(time, delta) {
+    if (!this.camTarget) return;
     const cam = this.cameras.main;
     const o = this.followOffset();
-    cam.startFollow(this.anchors[p.id], true, 0.12, 0.12, o.x, o.y);
+    const tx = this.camTarget.x - o.x;
+    const ty = this.camTarget.y - o.y;
+    const mx = cam.scrollX + cam.width / 2;
+    const my = cam.scrollY + cam.height / 2;
+    const k = 1 - Math.exp(-Math.min(delta, 100) / CAM_SMOOTH_MS);
+    cam.centerOn(mx + (tx - mx) * k, my + (ty - my) * k);
   }
 
   // 放大縮小（按鈕、兩指、滑鼠滾輪都用這個）
   setZoom(z) {
     const cam = this.cameras.main;
     cam.setZoom(Phaser.Math.Clamp(z, ZOOM.min, ZOOM.max));
-    if (cam._follow) {
-      const o = this.followOffset();
-      cam.setFollowOffset(o.x, o.y);
-    }
   }
 
   // ---------- 棋子 ----------
@@ -523,8 +568,10 @@ class GameScene extends Phaser.Scene {
     this.followPlayer(this.players[0]);
     this.hud.say('選戰開始！\n投票日支持者最多的人當選！');
     await this.wait(1200);
+    this.recordPoll();
     while (!this.gameOver) {
       await this.playTurn(this.players[this.current]);
+      this.recordPoll(this.current);
       if (this.gameOver) break;
       if (this.checkEnd()) break;
       this.nextPlayer();
@@ -596,12 +643,23 @@ class GameScene extends Phaser.Scene {
       Sfx.hop();
       t.shadow.setPosition(x, y).setDepth(y + 29);
       t.setDepth(Math.max(t.depth, y + 30));
-      // 定位點平滑地滑到下一格（鏡頭跟著它），角色本身另外做彈跳
+      // 一個動畫同時算：定位點沿著路平滑前進（鏡頭跟著它）、角色在上面做拋物線彈跳
       const anchor = this.anchors[p.id];
-      this.tweens.killTweensOf(anchor);
-      this.tweens.add({ targets: anchor, x, y, duration: 220 });
-      await this.tweenP({ targets: t, x: (t.x + x) / 2, y: Math.min(t.y, y) - HOP_WALK, duration: 110, ease: 'Quad.easeOut' });
-      await this.tweenP({ targets: t, x, y, duration: 110, ease: 'Quad.easeIn' });
+      const sx = t.x;
+      const sy = t.y;
+      const prog = { v: 0 };
+      await this.tweenP({
+        targets: prog, v: 1, duration: STEP_MS,
+        onUpdate: () => {
+          const v = prog.v;
+          anchor.x = sx + (x - sx) * v;
+          anchor.y = sy + (y - sy) * v;
+          t.setPosition(anchor.x, anchor.y - Math.sin(v * Math.PI) * HOP_WALK);
+        },
+      });
+      anchor.x = x;
+      anchor.y = y;
+      t.setPosition(x, y);
       t.setDepth(y + 30);
       if (dir > 0 && p.pos === 0) {
         p.money += GAME_RULES.passGoBonus;
@@ -963,7 +1021,7 @@ class GameScene extends Phaser.Scene {
     const lastTurnOfRound = this.players.slice(this.current + 1).every((p) => p.bankrupt);
     if (alive.length <= 1 || (this.round >= GAME_RULES.maxRounds && lastTurnOfRound)) {
       this.gameOver = true;
-      this.cameras.main.stopFollow();
+      this.stopFollow();
       this.hud.showResults();
       return true;
     }

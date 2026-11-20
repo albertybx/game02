@@ -305,12 +305,19 @@ class HudScene extends Phaser.Scene {
   }
 
   async rollDice() {
-    for (let k = 0; k < 10; k++) {
-      const n = Phaser.Math.Between(1, 6);
-      this.dice.setTexture(`dice${n}`).setAngle(Phaser.Math.Between(-20, 20));
-      Sfx.beep(300 + n * 60, 0.03);
-      await this.gs.wait(60);
-    }
+    const prog = { v: 0 };
+    let lastFace = -1;
+    await new Promise((res) => this.tweens.add({
+      targets: prog, v: 1, duration: 600, onComplete: res,
+      onUpdate: () => {
+        const face = Math.floor(prog.v * 10); // 600 毫秒內換 10 次
+        if (face === lastFace) return;
+        lastFace = face;
+        const n = Phaser.Math.Between(1, 6);
+        this.dice.setTexture(`dice${n}`).setAngle(Phaser.Math.Between(-20, 20));
+        Sfx.beep(300 + n * 60, 0.03);
+      },
+    }));
     const roll = Phaser.Math.Between(1, 6);
     this.dice.setTexture(`dice${roll}`).setAngle(0);
     Sfx.beep(880, 0.08);
@@ -375,7 +382,7 @@ class HudScene extends Phaser.Scene {
     // 直版：上下排；橫版：左邊當選人、右邊排名
     const L = LANDSCAPE
       ? { title: 70, winX: W * 0.3, img: 340, winText: 520, rankX: 700, rankR: 1180, rankY: 200, btnX: W * 0.72, btn: 620 }
-      : { title: 140 + TALL_DY, winX: W / 2, img: 300 + TALL_DY, winText: 430 + TALL_DY, rankX: 140, rankR: 580, rankY: 530 + TALL_DY, btnX: W / 2, btn: 920 + TALL_DY };
+      : { title: 140 + TALL_DY, winX: W / 2, img: 300 + TALL_DY, winText: 430 + TALL_DY, rankX: 140, rankR: 580, rankY: 500 + TALL_DY, btnX: W / 2, btn: 920 + TALL_DY };
     layer.add(this.add.text(W / 2, L.title, '★ 投票日 ★', { fontFamily: FONT, fontSize: '56px', color: '#ffec27', stroke: '#000', strokeThickness: 10 }).setOrigin(0.5));
     const img = addCharacter(this, L.winX, L.img, winner.id, LANDSCAPE ? 240 : 180);
     layer.add(img);
@@ -383,7 +390,7 @@ class HudScene extends Phaser.Scene {
     layer.add(this.add.text(L.winX, L.winText, `${winner.name} 高票當選！`, { fontFamily: FONT, fontSize: LANDSCAPE ? '40px' : '48px', color: winner.color, stroke: '#000', strokeThickness: 10 }).setOrigin(0.5));
 
     ranking.forEach((p, k) => {
-      const y = L.rankY + k * 70;
+      const y = L.rankY + k * (LANDSCAPE ? 70 : 62);
       layer.add(this.add.text(L.rankX, y, `${k + 1}. ${p.name}`, { fontFamily: FONT, fontSize: '32px', color: '#fff1e8' }));
       layer.add(this.add.text(L.rankR, y, p.bankrupt ? '破產' : `支持者 ${p.fans}`, { fontFamily: FONT, fontSize: '28px', color: p.bankrupt ? '#ff004d' : '#ffec27' }).setOrigin(1, 0));
     });
@@ -395,6 +402,9 @@ class HudScene extends Phaser.Scene {
       this.tweens.add({ targets: r, y: H + 20, duration: Phaser.Math.Between(2000, 4000), repeat: -1, delay: Phaser.Math.Between(0, 2000) });
     }
 
+    layer.add(makeButton(this, L.btnX, L.btn - (LANDSCAPE ? 100 : 94), 340, 76, '選戰趨勢報告', {
+      fill: 0x29adff, color: '#000000', fontSize: '32px', onClick: () => showReport(gs),
+    }));
     layer.add(makeButton(this, L.btnX, L.btn, 340, 90, '再選一次', {
       fill: 0xff004d, color: '#fff1e8', fontSize: '40px', onClick: () => gs.scene.start('title'),
     }));
