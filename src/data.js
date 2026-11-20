@@ -23,7 +23,16 @@ const GAME_RULES = {
   chiefRentRate: 0.1,   // 里長格過路費：價錢 × 0.1
 
   talentFans: 150,      // 政壇人物格（戰將功能做好前的暫時效果）：支持者 + 150
+
+  // ---- 特殊挑戰：英文學習格（首頁可以選擇要不要加入）----
+  quizMoney: 200,        // 答對：錢 + 200（大幅）
+  quizFans: 80,          // 答對：支持者 + 80（小幅）
+  quizWrongFans: 50,     // 答錯：支持者 - 50（小幅）
+  quizCpuAccuracy: 0.6,  // 電腦玩家答對的機率
 };
+
+// 首頁可以選的回合數
+const ROUND_OPTIONS = [10, 20, 30];
 
 // 台北市 12 個行政區（地標和里長都屬於某一區；同一區全部買下，地標空地過路費加倍）
 const DISTRICTS = ['中正區', '大安區', '文山區', '信義區', '南港區', '內湖區', '松山區', '中山區', '士林區', '北投區', '大同區', '萬華區'];
@@ -77,6 +86,17 @@ const TILES = [
   { type: 'property', name: '龍山寺',       icon: 'longshan',     price: 60,  district: '萬華區' },
   { type: 'chief',    name: '萬華區里長',   icon: 'chief',        price: 80,  district: '萬華區' },
 ];
+
+// 加入「英文挑戰」時，把下面這幾格換成英文挑戰格（散在地圖的南、東、西北）
+const QUIZ_TILE = { type: 'quiz', name: '英文挑戰', icon: 'quiz' };
+const QUIZ_TILE_SLOTS = [7, 15, 30]; // 原本是：命運、機會、政壇人物
+const BASE_TILES = TILES.map((t) => ({ ...t }));
+
+// 開新遊戲時依首頁的選項重新排地圖格子（TILES 會被改成這一場用的版本）
+function applyTileOptions({ quiz }) {
+  TILES.length = 0;
+  BASE_TILES.forEach((t, i) => TILES.push(quiz && QUIZ_TILE_SLOTS.includes(i) ? { ...QUIZ_TILE } : { ...t }));
+}
 
 // 角色：目前是虛構的「政治人物」角色。
 // 想換成真實政治人物，改 name 就好。image 是 AI 畫的角色圖；沒有 image 時用像素小圖（body 可選 person_short / person_long / person_bald）。
@@ -144,6 +164,7 @@ const BUILDING_IMAGES = {
   taipei101: 'assets/buildings/taipei101.png',
   chief: 'assets/buildings/chief.png',     // 里長辦公處（12 區共用）
   talent: 'assets/buildings/talent.png',   // 政壇人物格（造勢小舞台）
+  quiz: 'assets/buildings/quiz.png',       // 英文挑戰格（小黑板和書）
   // 路上的格子和道具
   go: 'assets/buildings/go.png',
   jam: 'assets/buildings/jam.png',

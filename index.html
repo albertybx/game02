@@ -43,13 +43,58 @@
     #guide .g-tile { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 2px dashed #3a4a80; }
     #guide .g-pic { flex: 0 0 72px; height: 72px; display: flex; align-items: flex-end; justify-content: center; }
     #guide .g-pic img { max-width: 72px; max-height: 72px; image-rendering: auto; }
+
+    /* 英文挑戰視窗 */
+    #quiz {
+      position: fixed; inset: 0; z-index: 11; background: rgba(5, 8, 20, 0.75);
+      display: flex; align-items: center; justify-content: center;
+      padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      font-family: 'Cubic11', monospace; color: #fff1e8;
+    }
+    #quiz .q-box {
+      width: min(560px, 100%); max-height: 100%; overflow-y: auto; background: #1d2b53;
+      border: 4px solid #000; box-shadow: 6px 6px 0 #000, inset 0 0 0 3px #00e436;
+    }
+    #quiz .q-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 10px 14px; background: #00e436; color: #000; border-bottom: 4px solid #000; font-size: 24px;
+    }
+    #quiz .q-who { font-size: 16px; padding: 3px 8px; border: 2px solid #000; color: #000; }
+    #quiz .q-body { padding: 14px 16px 18px; }
+    #quiz .q-type { margin: 0 0 6px; color: #7fd3ff; font-size: 16px; }
+    #quiz .q-q { margin: 0 0 10px; font-size: 24px; line-height: 1.5; overflow-wrap: anywhere; }
+    #quiz .q-hint { margin: 0 0 12px; color: #ffec27; font-size: 18px; }
+    #quiz button, #quiz input {
+      font-family: inherit; font-size: 22px; color: #000; border: 3px solid #000; box-shadow: 3px 3px 0 #000;
+    }
+    #quiz button { background: #fff1e8; padding: 10px 12px; cursor: pointer; }
+    #quiz button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+    #quiz button:disabled { cursor: default; }
+    #quiz .q-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    #quiz .q-choices button { text-align: center; min-height: 56px; overflow-wrap: anywhere; }
+    #quiz .q-choices button.ok { background: #00e436; }
+    #quiz .q-choices button.bad { background: #ff77a8; }
+    #quiz .q-fill { display: flex; gap: 10px; }
+    #quiz .q-fill input { flex: 1; min-width: 0; padding: 10px; background: #fff1e8; }
+    #quiz .q-fill button { background: #ffec27; }
+    #quiz .q-result { margin-top: 14px; padding: 10px 12px; border: 3px solid #000; background: #0b1020; }
+    #quiz .q-result.ok { box-shadow: inset 0 0 0 3px #00e436; }
+    #quiz .q-result.bad { box-shadow: inset 0 0 0 3px #ff004d; }
+    #quiz .q-result p { margin: 4px 0; font-size: 19px; }
+    #quiz .q-result b { color: #ffec27; font-weight: normal; }
+    #quiz .q-verdict { font-size: 26px !important; }
+    #quiz .q-result.ok .q-verdict { color: #00e436; }
+    #quiz .q-result.bad .q-verdict { color: #ff77a8; }
+    #quiz .q-note { color: #c2c3c7; }
+    #quiz .q-next { margin-top: 8px; width: 100%; background: #ffec27 !important; }
+    @media (max-width: 420px) { #quiz .q-choices { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div id="game"></div>
   <script>
     // 版本號：每次更新遊戲就改這個（例如 2026.11.20-2），瀏覽器就會重新下載新的檔案，不會用到舊的暫存
-    window.GAME_VERSION = '2026.11.20-4';
+    window.GAME_VERSION = '2026.11.20-5';
     [
       'lib/phaser.min.js',
       'src/pixelart.js',
@@ -57,6 +102,7 @@
       'src/common.js',
       'src/music.js',
       'src/guide.js',
+      'src/quiz.js',
       'src/title.js',
       'src/game.js',
       'src/hud.js',

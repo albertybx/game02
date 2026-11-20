@@ -126,35 +126,96 @@ class HudScene extends Phaser.Scene {
     this.refreshPoll();
   }
 
-  // ---------- 即時民調：每位玩家支持者的橫條圖 ----------
-  // 最高的人長條拉滿，其他人照比例；右邊顯示佔所有支持者的百分比
+  // ---------- 即時民調：長條圖 / 圓餅圖（右上角按鈕切換，會記住選擇）----------
   drawPoll(y) {
     const players = this.gs.players;
-    // 手機畫面會整個縮小，所以直版的字和長條要大一點
+    // 手機畫面會整個縮小，所以直版的字和圖要大一點
     const S = LANDSCAPE ? 1 : 1.3;
     const pw = Math.round(250 * S);
     const rowH = Math.round(28 * S);
     const head = Math.round(36 * S);
-    const ph = head + players.length * rowH + 4;
+    const R = Math.round(46 * S); // 圓餅半徑
+    const ph = Math.max(head + players.length * rowH + 4, head + R * 2 + 10);
     const x = MAP_VIEW.x + 12;
     const c = this.add.container(x, y);
     c.add(this.add.rectangle(0, 0, pw, ph, 0x1d2b53, 0.88).setOrigin(0).setStrokeStyle(3, 0x000000));
     c.add(this.add.text(10, 6, '即時民調', { fontFamily: FONT, fontSize: `${Math.round(18 * S)}px`, color: '#ffec27' }));
+
+    // 切換按鈕（顯示「另一種」圖的名字）
+    try { this.pollMode = localStorage.getItem('pollMode') === 'pie' ? 'pie' : 'bar'; } catch (e) { this.pollMode = 'bar'; }
+    const tb = makeButton(this, pw - Math.round(38 * S), Math.round(17 * S), Math.round(64 * S), Math.round(26 * S), '', {
+      fill: 0xfff1e8, fontSize: `${Math.round(15 * S)}px`,
+      onClick: () => {
+        this.pollMode = this.pollMode === 'bar' ? 'pie' : 'bar';
+        try { localStorage.setItem('pollMode', this.pollMode); } catch (e) { /* 存不了沒關係 */ }
+        this.updatePollMode();
+      },
+    });
+    c.add(tb);
+    this.pollToggle = tb;
+
+    const hs = Math.round(24 * S);
+    // 長條圖
+    this.pollBarGroup = this.add.container(0, 0);
+    c.add(this.pollBarGroup);
     this.pollBarW = Math.round(142 * S);
     this.pollRows = players.map((p, k) => {
       const ry = head - 2 + k * rowH;
-      const hs = Math.round(24 * S);
       const bx = hs + 16;
       const bh = Math.round(16 * S);
-      c.add(this.add.rectangle(8, ry, hs, hs, 0xfff1e8).setOrigin(0));
-      c.add(addHeadshot(this, 9, ry + 1, p.id, hs - 2));
-      c.add(this.add.rectangle(bx, ry + 4, this.pollBarW, bh, 0x0b1020).setOrigin(0));
+      this.pollBarGroup.add(this.add.rectangle(8, ry, hs, hs, 0xfff1e8).setOrigin(0));
+      this.pollBarGroup.add(addHeadshot(this, 9, ry + 1, p.id, hs - 2));
+      this.pollBarGroup.add(this.add.rectangle(bx, ry + 4, this.pollBarW, bh, 0x0b1020).setOrigin(0));
       const bar = this.add.rectangle(bx, ry + 4, 2, bh, hex(p.color)).setOrigin(0);
-      c.add(bar);
+      this.pollBarGroup.add(bar);
       const pct = this.add.text(pw - 8, ry + 2, '', { fontFamily: FONT, fontSize: `${Math.round(16 * S)}px`, color: '#ffffff' }).setOrigin(1, 0);
-      c.add(pct);
+      this.pollBarGroup.add(pct);
       return { bar, pct };
     });
+
+    // 圓餅圖：左邊是圓餅，右邊是大頭照和百分比
+    this.pollPieGroup = this.add.container(0, 0);
+    c.add(this.pollPieGroup);
+    this.pie = { cx: 10 + R, cy: head + R + 2, R, g: this.add.graphics() };
+    this.pollPieGroup.add(this.pie.g);
+    const lx = 10 + R * 2 + 14;
+    this.pollPieRows = players.map((p, k) => {
+      const ry = head - 2 + k * rowH;
+      this.pollPieGroup.add(this.add.rectangle(lx, ry, hs, hs, hex(p.color)).setOrigin(0).setStrokeStyle(2, 0x000000));
+      this.pollPieGroup.add(addHeadshot(this, lx + 1, ry + 1, p.id, hs - 2));
+      const pct = this.add.text(pw - 8, ry + 2, '', { fontFamily: FONT, fontSize: `${Math.round(16 * S)}px`, color: '#ffffff' }).setOrigin(1, 0);
+      this.pollPieGroup.add(pct);
+      return { pct };
+    });
+    this.pieShown = players.map(() => 1 / players.length); // 圓餅目前畫出來的比例（動畫用）
+    this.updatePollMode();
+  }
+
+  updatePollMode() {
+    const pie = this.pollMode === 'pie';
+    this.pollBarGroup.setVisible(!pie);
+    this.pollPieGroup.setVisible(pie);
+    this.pollToggle.label.setText(pie ? '長條' : '圓餅');
+    this.drawPie();
+  }
+
+  // 畫圓餅：每位玩家一片，從 12 點鐘方向順時針
+  drawPie() {
+    const { cx, cy, R, g } = this.pie;
+    g.clear();
+    g.fillStyle(0x0b1020, 1).fillCircle(cx, cy, R + 3);
+    let a = -Math.PI / 2;
+    this.gs.players.forEach((p, k) => {
+      const da = this.pieShown[k] * Math.PI * 2;
+      if (da <= 0.001) return;
+      g.fillStyle(hex(p.color), 1);
+      g.slice(cx, cy, R, a, a + da, false);
+      g.fillPath();
+      g.lineStyle(2, 0x000000, 1);
+      g.lineBetween(cx, cy, cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+      a += da;
+    });
+    g.lineStyle(3, 0x000000, 1).strokeCircle(cx, cy, R);
   }
 
   refreshPoll() {
@@ -168,7 +229,18 @@ class HudScene extends Phaser.Scene {
       const w = Math.max(2, Math.round(this.pollBarW * fans[k] / max));
       this.tweens.killTweensOf(row.bar);
       this.tweens.add({ targets: row.bar, width: w, duration: 500, ease: 'Quad.easeOut' });
-      row.pct.setText(`${Math.round(fans[k] * 100 / total)}%`);
+      const text = `${Math.round(fans[k] * 100 / total)}%`;
+      row.pct.setText(text);
+      this.pollPieRows[k].pct.setText(text);
+    });
+    // 圓餅慢慢轉到新的比例
+    const from = [...this.pieShown];
+    const to = fans.map((f) => f / total);
+    const t = { v: 0 };
+    if (this.pieTween) this.pieTween.stop();
+    this.pieTween = this.tweens.add({
+      targets: t, v: 1, duration: 500, ease: 'Quad.easeOut',
+      onUpdate: () => { this.pieShown = from.map((f, k) => f + (to[k] - f) * t.v); this.drawPie(); },
     });
   }
 
@@ -193,6 +265,7 @@ class HudScene extends Phaser.Scene {
     const kind = {
       go: `經過領 $${GAME_RULES.passGoBonus}`, jam: '下回合暫停一次', mrt: '休息一下', tow: `罰款 $${GAME_RULES.towFine}`,
       chance: '抽一張機會卡', fate: '抽一張命運卡', talent: '遇到政壇前輩',
+      quiz: `答對 $${GAME_RULES.quizMoney}、支持者 +${GAME_RULES.quizFans}`,
       property: `${t.district}・地標 $${t.price}`, chief: `${t.district}・里長 $${t.price}`,
     }[t.type] || '';
     const owner = st && st.owner !== null ? `・${this.gs.players[st.owner].name}的地盤` : '';

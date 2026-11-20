@@ -5,8 +5,11 @@ class TitleScene extends Phaser.Scene {
   constructor() { super('title'); }
 
   init() {
-    this.playerCount = 4;
-    this.mode = 'cpu'; // cpu = 你 vs 電腦；hotseat = 大家輪流用同一支手機
+    // 首頁的選項（會記住上次的選擇）
+    this.opts = { playerCount: 4, mode: 'cpu', rounds: 20, quiz: false, quizLevel: 'junior' };
+    try { Object.assign(this.opts, JSON.parse(localStorage.getItem('options') || '{}')); } catch (e) { /* 讀不到就用預設 */ }
+    if (!ROUND_OPTIONS.includes(this.opts.rounds)) this.opts.rounds = 20;
+    this.rows = [];
   }
 
   preload() {
@@ -27,16 +30,21 @@ class TitleScene extends Phaser.Scene {
 
     // 背景音樂：點一下畫面任何地方就會開始（瀏覽器規定要先點過才能有聲音）
     Music.want('title');
-    makeMusicButton(this, W - 46, 46);
 
-    // 直版、橫版的位置
+    // 最上面：左邊「選戰指南」、右邊音樂開關
+    makeButton(this, 118, 44, 210, 52, '選戰指南', { fill: 0xffec27, fontSize: '24px', onClick: () => showGuide() });
+    makeMusicButton(this, W - 46, 44);
+
+    // 直版、橫版的位置（直版畫面比較高時整體往下移，保持置中）
+    const dy = TALL_DY;
     const L = LANDSCAPE
-      ? { t1: 86, t2: 186, sub: 258, chars: 345, names: 415, countLbl: 478, count: 540, modeLbl: 478, mode: 540, start: 656, hint: 728, countX: 340, modeX: 940 }
-      : { t1: 150, t2: 260, sub: 340, chars: 450, names: 520, countLbl: 600, count: 660, modeLbl: 750, mode: 810, start: 940, hint: 1010, countX: W / 2, modeX: W / 2 };
-    if (!LANDSCAPE) for (const k of ['t1', 't2', 'sub', 'chars', 'names', 'countLbl', 'count', 'modeLbl', 'mode', 'start', 'hint']) L[k] += TALL_DY;
+      ? { t1: 70, t2: 154, size: '80px', sub: 214, chars: 292, names: 360, start: 672,
+        left: { x: 70, w: 540 }, right: { x: 670, w: 540 }, rowY: [430, 500, 570] }
+      : { t1: 140 + dy, t2: 236 + dy, size: '96px', sub: 306 + dy, chars: 392 + dy, names: 458 + dy, start: 942 + dy,
+        left: { x: 30, w: 660 }, right: { x: 30, w: 660 }, rowY: [530 + dy, 604 + dy, 678 + dy, 752 + dy, 826 + dy] };
 
-    this.add.text(W / 2, L.t1, '台北政壇', { fontFamily: FONT, fontSize: '96px', color: '#ffec27', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
-    this.add.text(W / 2, L.t2, '大富翁', { fontFamily: FONT, fontSize: '96px', color: '#ff004d', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
+    this.add.text(W / 2, L.t1, '台北政壇', { fontFamily: FONT, fontSize: L.size, color: '#ffec27', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
+    this.add.text(W / 2, L.t2, '大富翁', { fontFamily: FONT, fontSize: L.size, color: '#ff004d', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
     this.add.text(W / 2, L.sub, '～ 買下台北，贏得選戰 ～', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
 
     // 角色展示
@@ -47,29 +55,57 @@ class TitleScene extends Phaser.Scene {
       this.add.text(x, L.names, ch.name, { fontFamily: FONT, fontSize: '24px', color: ch.color, stroke: '#000', strokeThickness: 6 }).setOrigin(0.5);
     });
 
-    // 玩家人數
-    this.add.text(L.countX, L.countLbl, '幾位候選人參選？', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
-    this.countBtns = [2, 3, 4].map((n, i) => makeButton(this, L.countX - 160 + i * 160, L.count, 130, 64, `${n} 人`, {
-      onClick: () => { this.playerCount = n; this.refresh(); },
-    }));
+    // 選項：直版是一欄五排；橫版是左邊三排（人數、玩法、回合）、右邊兩排（英文挑戰、程度）
+    const ry = L.rowY;
+    const leftCol = L.left;
+    const rightCol = L.right;
+    this.optionRow('人數', leftCol, ry[0], 'playerCount', [2, 3, 4].map((n) => ({ text: `${n} 人`, value: n })));
+    this.optionRow('玩法', leftCol, ry[1], 'mode', [{ text: '我 vs 電腦', value: 'cpu' }, { text: '朋友輪流玩', value: 'hotseat' }]);
+    this.optionRow('回合數', leftCol, ry[2], 'rounds', ROUND_OPTIONS.map((n) => ({ text: `${n} 回合`, value: n })));
+    this.optionRow('英文挑戰', rightCol, LANDSCAPE ? ry[0] : ry[3], 'quiz', [{ text: '不加入', value: false }, { text: '加入', value: true }]);
+    this.optionRow('測驗程度', rightCol, LANDSCAPE ? ry[1] : ry[4], 'quizLevel', QUIZ_LEVELS.map((lv) => ({ text: lv.name, value: lv.key })), () => this.opts.quiz);
 
-    // 模式
-    this.add.text(L.modeX, L.modeLbl, '怎麼玩？', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
-    this.modeBtns = [
-      makeButton(this, L.modeX - 160, L.mode, 280, 64, '我 vs 電腦', { fontSize: '26px', onClick: () => { this.mode = 'cpu'; this.refresh(); } }),
-      makeButton(this, L.modeX + 160, L.mode, 280, 64, '朋友輪流玩', { fontSize: '26px', onClick: () => { this.mode = 'hotseat'; this.refresh(); } }),
-    ];
-
-    makeButton(this, W / 2, L.start, 360, 96, '開始選戰！', {
+    makeButton(this, W / 2, L.start, 360, LANDSCAPE ? 84 : 92, '開始選戰！', {
       fill: 0xff004d, color: '#fff1e8', fontSize: '44px',
-      onClick: () => this.scene.start('game', { playerCount: this.playerCount, mode: this.mode }),
+      onClick: () => {
+        try { localStorage.setItem('options', JSON.stringify(this.opts)); } catch (e) { /* 存不了沒關係 */ }
+        this.scene.start('game', { ...this.opts });
+      },
     });
 
-    makeButton(this, W / 2, L.hint + 18, 220, 52, '選戰指南', { fill: 0xffec27, fontSize: '24px', onClick: () => showGuide() });
     // 版本號（確認是不是最新版用）
-    this.add.text(12, 12, `版本 ${window.GAME_VERSION || ''}`, { fontFamily: FONT, fontSize: '18px', color: '#83769c' });
+    this.add.text(12, H - 30, `版本 ${window.GAME_VERSION || ''}`, { fontFamily: FONT, fontSize: '18px', color: '#83769c' });
     this.refresh();
     if (!Sfx.ready) this.showPressStart();
+  }
+
+  // 一排選項：左邊是標題，右邊幾個按鈕，選中的是黃色。enabled() 回傳 false 時整排變暗、不能按
+  optionRow(label, col, y, key, items, enabled = () => true) {
+    const lw = 150;
+    const gap = 10;
+    const n = items.length;
+    const bw = (col.w - lw - gap * (n - 1)) / n;
+    const title = this.add.text(col.x, y, label, { fontFamily: FONT, fontSize: '26px', color: '#fff1e8' }).setOrigin(0, 0.5);
+    const btns = items.map((it, k) => makeButton(this, col.x + lw + bw / 2 + k * (bw + gap), y, bw, 58, it.text, {
+      fontSize: it.text.length > 5 ? '22px' : '26px',
+      onClick: () => {
+        if (!enabled()) return;
+        this.opts[key] = it.value;
+        this.refresh();
+      },
+    }));
+    this.rows.push({ key, items, btns, title, enabled });
+  }
+
+  refresh() {
+    for (const row of this.rows) {
+      const on = row.enabled();
+      row.title.setAlpha(on ? 1 : 0.4);
+      row.btns.forEach((b, k) => {
+        b.body.setFillStyle(row.items[k].value === this.opts[row.key] ? 0xffec27 : 0x83769c);
+        b.setAlpha(on ? 1 : 0.35);
+      });
+    }
   }
 
   // 「點一下開始」畫面：瀏覽器不允許網頁一打開就自動出聲，要先點一下。
@@ -94,12 +130,6 @@ class TitleScene extends Phaser.Scene {
       Sfx.coin();
       this.tweens.add({ targets: layer, alpha: 0, duration: 250, onComplete: () => layer.destroy() });
     });
-  }
-
-  refresh() {
-    this.countBtns.forEach((b, i) => b.body.setFillStyle([2, 3, 4][i] === this.playerCount ? 0xffec27 : 0x83769c));
-    this.modeBtns[0].body.setFillStyle(this.mode === 'cpu' ? 0xffec27 : 0x83769c);
-    this.modeBtns[1].body.setFillStyle(this.mode === 'hotseat' ? 0xffec27 : 0x83769c);
   }
 
   drawSkyline() {
