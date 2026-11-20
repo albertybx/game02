@@ -112,6 +112,11 @@ const GENERALS = [
   { id: 5, name: '小安',   title: '志工隊長',   eloquence: 3, network: 3, charisma: 3, home: '文山區', image: 'assets/generals/gen5.png' },
   { id: 6, name: '陳醫師', title: '社區醫師',   eloquence: 3, network: 4, charisma: 2, home: '北投區', image: 'assets/generals/gen6.png' },
   { id: 7, name: '莉莉',   title: '前奧運國手', eloquence: 1, network: 3, charisma: 5, home: '士林區', image: 'assets/generals/gen7.png' },
+  // 以下四位：名字是暫時的，之後可以改
+  { id: 8,  name: '戰將甲', title: '前總統',   eloquence: 5, network: 2, charisma: 2, home: '中正區', image: 'assets/generals/gen8.png' },
+  { id: 9,  name: '戰將乙', title: '前總統',   eloquence: 2, network: 4, charisma: 3, home: '中山區', image: 'assets/generals/gen9.png' },
+  { id: 10, name: '戰將丙', title: '前市長',   eloquence: 3, network: 2, charisma: 4, home: '信義區', image: 'assets/generals/gen10.png' },
+  { id: 11, name: '戰將丁', title: '前總統',   eloquence: 3, network: 4, charisma: 2, home: '南港區', image: 'assets/generals/gen11.png' },
 ];
 
 const GENERAL_RULES = {
