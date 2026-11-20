@@ -23,3 +23,10 @@ if (document.fonts && document.fonts.load) {
 } else {
   startGame();
 }
+
+// 在標題畫面轉螢幕（直↔橫）時，重新整理換成對應的版面；遊戲進行中不打斷
+window.addEventListener('resize', () => {
+  const nowLandscape = window.innerWidth > window.innerHeight * 1.05;
+  if (nowLandscape === LANDSCAPE || !window.__game) return;
+  if (window.__game.scene.isActive('title')) location.reload();
+});

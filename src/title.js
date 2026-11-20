@@ -24,37 +24,43 @@ class TitleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(COLORS.bg);
     this.drawSkyline();
 
-    this.add.text(W / 2, 150, '台北政壇', { fontFamily: FONT, fontSize: '96px', color: '#ffec27', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
-    this.add.text(W / 2, 260, '大富翁', { fontFamily: FONT, fontSize: '96px', color: '#ff004d', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
-    this.add.text(W / 2, 340, '～ 買下台北，贏得選戰 ～', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
+    // 直版、橫版的位置
+    const L = LANDSCAPE
+      ? { t1: 86, t2: 186, sub: 258, chars: 345, names: 415, countLbl: 478, count: 540, modeLbl: 478, mode: 540, start: 656, hint: 728, countX: 340, modeX: 940 }
+      : { t1: 150, t2: 260, sub: 340, chars: 450, names: 520, countLbl: 600, count: 660, modeLbl: 750, mode: 810, start: 940, hint: 1010, countX: W / 2, modeX: W / 2 };
+    if (!LANDSCAPE) for (const k of ['t1', 't2', 'sub', 'chars', 'names', 'countLbl', 'count', 'modeLbl', 'mode', 'start', 'hint']) L[k] += TALL_DY;
+
+    this.add.text(W / 2, L.t1, '台北政壇', { fontFamily: FONT, fontSize: '96px', color: '#ffec27', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
+    this.add.text(W / 2, L.t2, '大富翁', { fontFamily: FONT, fontSize: '96px', color: '#ff004d', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
+    this.add.text(W / 2, L.sub, '～ 買下台北，贏得選戰 ～', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
 
     // 角色展示
     CHARACTERS.forEach((ch, i) => {
-      const x = 120 + i * 160;
-      const img = addCharacter(this, x, 450, i, 110);
-      this.tweens.add({ targets: img, y: 440, duration: 400 + i * 60, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3] });
-      this.add.text(x, 520, ch.name, { fontFamily: FONT, fontSize: '24px', color: ch.color, stroke: '#000', strokeThickness: 6 }).setOrigin(0.5);
+      const x = W / 2 - 240 + i * 160;
+      const img = addCharacter(this, x, L.chars, i, 110);
+      this.tweens.add({ targets: img, y: L.chars - 10, duration: 400 + i * 60, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3] });
+      this.add.text(x, L.names, ch.name, { fontFamily: FONT, fontSize: '24px', color: ch.color, stroke: '#000', strokeThickness: 6 }).setOrigin(0.5);
     });
 
     // 玩家人數
-    this.add.text(W / 2, 600, '幾位候選人參選？', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
-    this.countBtns = [2, 3, 4].map((n, i) => makeButton(this, 200 + i * 160, 660, 130, 64, `${n} 人`, {
+    this.add.text(L.countX, L.countLbl, '幾位候選人參選？', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
+    this.countBtns = [2, 3, 4].map((n, i) => makeButton(this, L.countX - 160 + i * 160, L.count, 130, 64, `${n} 人`, {
       onClick: () => { this.playerCount = n; this.refresh(); },
     }));
 
     // 模式
-    this.add.text(W / 2, 750, '怎麼玩？', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
+    this.add.text(L.modeX, L.modeLbl, '怎麼玩？', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
     this.modeBtns = [
-      makeButton(this, 200, 810, 280, 64, '我 vs 電腦', { fontSize: '26px', onClick: () => { this.mode = 'cpu'; this.refresh(); } }),
-      makeButton(this, 520, 810, 280, 64, '朋友輪流玩', { fontSize: '26px', onClick: () => { this.mode = 'hotseat'; this.refresh(); } }),
+      makeButton(this, L.modeX - 160, L.mode, 280, 64, '我 vs 電腦', { fontSize: '26px', onClick: () => { this.mode = 'cpu'; this.refresh(); } }),
+      makeButton(this, L.modeX + 160, L.mode, 280, 64, '朋友輪流玩', { fontSize: '26px', onClick: () => { this.mode = 'hotseat'; this.refresh(); } }),
     ];
 
-    makeButton(this, W / 2, 940, 360, 96, '開始選戰！', {
+    makeButton(this, W / 2, L.start, 360, 96, '開始選戰！', {
       fill: 0xff004d, color: '#fff1e8', fontSize: '44px',
       onClick: () => this.scene.start('game', { playerCount: this.playerCount, mode: this.mode }),
     });
 
-    this.add.text(W / 2, 1010, '音效：點按鈕後開啟', { fontFamily: FONT, fontSize: '20px', color: '#83769c' }).setOrigin(0.5);
+    this.add.text(W / 2, L.hint, '音效：點按鈕後開啟', { fontFamily: FONT, fontSize: '20px', color: '#83769c' }).setOrigin(0.5);
     this.refresh();
   }
 
@@ -67,8 +73,9 @@ class TitleScene extends Phaser.Scene {
   drawSkyline() {
     // 背景小小的台北天際線
     const icons = ['longshan', 'station', 'presidential', 'taipei101', 'grandhotel', 'arena', 'cks'];
+    const step = W / icons.length;
     icons.forEach((k, i) => {
-      addIcon(this, 60 + i * 100, H - 10, k, k === 'taipei101' ? 220 : 60).setOrigin(0.5, 1).setAlpha(0.35);
+      addIcon(this, step / 2 + i * step, H - 10, k, k === 'taipei101' ? 220 : 60).setOrigin(0.5, 1).setAlpha(0.35);
     });
     // 星星
     for (let i = 0; i < 40; i++) {
