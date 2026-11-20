@@ -96,3 +96,19 @@ function makeCharacterTexture(scene, idx) {
   makePixelTexture(scene, `flag${idx}`, ART.flag, { T: ch.color });
 }
 
+
+// 角色圖：有 AI 畫的圖（charimg0…）就用，沒有就用像素小圖。height = 想要的顯示高度
+function addCharacter(scene, x, y, idx, height) {
+  const key = scene.textures.exists(`charimg${idx}`) ? `charimg${idx}` : `char${idx}`;
+  const img = scene.add.image(x, y, key);
+  img.setScale(height / img.height);
+  return img;
+}
+
+// 圖示：有 AI 畫的圖（bld_xxx）就用，沒有就用像素小圖。height = 想要的顯示高度
+function addIcon(scene, x, y, icon, height) {
+  const key = scene.textures.exists(`bld_${icon}`) ? `bld_${icon}` : icon;
+  const img = scene.add.image(x, y, key);
+  img.setScale(height / img.height);
+  return img;
+}

@@ -46,13 +46,13 @@ const TILES = [
 ];
 
 // 角色：目前是虛構的「政治人物」角色。
-// 想換成真實政治人物，改 name 就好；body 可選 person_short / person_long / person_bald。
+// 想換成真實政治人物，改 name 就好。image 是 AI 畫的角色圖；沒有 image 時用像素小圖（body 可選 person_short / person_long / person_bald）。
 // hair 頭髮、suit 西裝、tie 領帶、color 代表色（插旗、名牌用）
 const CHARACTERS = [
-  { name: '阿北市長', body: 'person_short', hair: '#000000', suit: '#1d2b53', tie: '#ff004d', color: '#ff004d' },
-  { name: '立委小美', body: 'person_long',  hair: '#ab5236', suit: '#fff1e8', tie: '#29adff', color: '#29adff' },
-  { name: '里長伯',   body: 'person_bald',  hair: '#c2c3c7', suit: '#008751', tie: '#ffec27', color: '#00e436' },
-  { name: '議員阿杰', body: 'person_short', hair: '#5f574f', suit: '#7e2553', tie: '#ffa300', color: '#ffec27' },
+  { name: '阿北市長', image: 'assets/characters/char0.png', body: 'person_short', hair: '#000000', suit: '#1d2b53', tie: '#ff004d', color: '#ff004d' },
+  { name: '立委小美', image: 'assets/characters/char1.png', body: 'person_long',  hair: '#ab5236', suit: '#fff1e8', tie: '#29adff', color: '#29adff' },
+  { name: '里長伯', image: 'assets/characters/char2.png',   body: 'person_bald',  hair: '#c2c3c7', suit: '#008751', tie: '#ffec27', color: '#00e436' },
+  { name: '議員阿杰', image: 'assets/characters/char3.png', body: 'person_short', hair: '#5f574f', suit: '#7e2553', tie: '#ffa300', color: '#ffec27' },
 ];
 
 // 卡片效果 effect：
@@ -97,4 +97,12 @@ const BUILDING_IMAGES = {
   cks: 'assets/buildings/cks.png',
   presidential: 'assets/buildings/presidential.png',
   taipei101: 'assets/buildings/taipei101.png',
+  // 路上的格子和道具
+  go: 'assets/buildings/go.png',
+  jam: 'assets/buildings/jam.png',
+  mrt: 'assets/buildings/mrt.png',
+  siren: 'assets/buildings/siren.png',
+  chance: 'assets/buildings/chance.png',
+  ballot: 'assets/buildings/ballot.png',
+  flag: 'assets/buildings/flag.png', // 白色旗子，遊戲裡會染成玩家的顏色
 };
