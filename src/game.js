@@ -5,11 +5,11 @@
 
 const ISO_W = 128;          // 一格菱形的寬
 const ISO_H = 64;           // 一格菱形的高
-const RING = 6;             // 道路是 6x6 的一圈（20 格）
-const MAP_MIN = -2;         // 地圖從第 -2 格畫到第 7 格（外面一圈放建築和樹）
-const MAP_MAX = 7;
-const ORIGIN_X = 640;
-const ORIGIN_Y = 260;
+const ORIGIN_X = 900;       // 地圖畫在世界座標的哪裡
+const ORIGIN_Y = 150;
+// 這些格子的 AI 圖本身就是一整塊地面，直接蓋在路上
+const FULL_TILE_TYPES = ['go', 'jam', 'mrt', 'tow', 'talent'];
+const LAND_MARGIN = 1;      // 路線外面留幾格陸地（越小，海岸線越貼著路線，地圖形狀越明顯）
 const UNOWNED_COLOR = 0x9a9aa6;  // 還沒人買的地：灰色
 const SHOW_BUILDING_NAMES = false; // 要不要在建築下面顯示名字
 
@@ -43,6 +43,7 @@ class GameScene extends Phaser.Scene {
   create() {
     this.cameras.main.setBackgroundColor(0x4a7fb5);
     Music.want('game');
+    this.buildBoard();
     this.drawWater();
     this.drawGround();
     this.drawRoad();
@@ -63,13 +64,87 @@ class GameScene extends Phaser.Scene {
     this.hud.events.once('create', () => this.runGame());
   }
 
+  // ---------- 地圖形狀 ----------
+  // 照 data.js 的 MAP_ROUTE 算出：路線上每一格、陸地範圍、每個地標/里長的空地、中間公園的位置
+  buildBoard() {
+    const key = (c, r) => `${c},${r}`;
+    // 1. 路線：從每個轉彎點一格一格走到下一個轉彎點
+    const path = [];
+    for (let k = 0; k < MAP_ROUTE.length; k++) {
+      const [c0, r0] = MAP_ROUTE[k];
+      const [c1, r1] = MAP_ROUTE[(k + 1) % MAP_ROUTE.length];
+      const dc = Math.sign(c1 - c0);
+      const dr = Math.sign(r1 - r0);
+      let c = c0;
+      let r = r0;
+      while (c !== c1 || r !== r1) { path.push({ col: c, row: r }); c += dc; r += dr; }
+    }
+    if (path.length !== TILES.length) console.warn(`地圖路線有 ${path.length} 格，但 TILES 有 ${TILES.length} 格，兩個要一樣`);
+    const onPath = new Set(path.map((p) => key(p.col, p.row)));
+
+    // 2. 範圍（路線外面多留 3 格放樹和海岸）
+    const cols = path.map((p) => p.col);
+    const rows = path.map((p) => p.row);
+    const minC = Math.min(...cols) - 3;
+    const maxC = Math.max(...cols) + 3;
+    const minR = Math.min(...rows) - 3;
+    const maxR = Math.max(...rows) + 3;
+
+    // 3. 從外圍往內灌水，灌不到的就是路線圍起來的「城市內部」
+    const outside = new Set();
+    const stack = [[minC, minR]];
+    while (stack.length) {
+      const [c, r] = stack.pop();
+      const k = key(c, r);
+      if (c < minC || c > maxC || r < minR || r > maxR || outside.has(k) || onPath.has(k)) continue;
+      outside.add(k);
+      stack.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
+    }
+    const inside = new Set();
+    const land = new Set(onPath);
+    for (let c = minC; c <= maxC; c++) {
+      for (let r = minR; r <= maxR; r++) {
+        const k = key(c, r);
+        if (!outside.has(k) && !onPath.has(k)) { inside.add(k); land.add(k); }
+        // 路線外面緊鄰的一圈也是陸地（放建築和樹），海岸線就會跟著路線的形狀
+        if (outside.has(k) && path.some((p) => Math.max(Math.abs(p.col - c), Math.abs(p.row - r)) <= LAND_MARGIN)) land.add(k);
+      }
+    }
+
+    // 4. 地標和里長的空地：選路旁邊一格。優先選「後面」（畫面上方），建築才不會擋住路上的角色
+    const taken = new Set(onPath);
+    const lots = [];
+    TILES.forEach((t, i) => {
+      if (t.type !== 'property' && t.type !== 'chief') return;
+      const { col, row } = path[i];
+      const cands = [[col - 1, row], [col, row - 1], [col + 1, row], [col, row + 1]];
+      const pick = cands.find(([c, r]) => land.has(key(c, r)) && !taken.has(key(c, r)));
+      if (!pick) { console.warn(`${t.name} 旁邊找不到空地`); return; }
+      taken.add(key(pick[0], pick[1]));
+      lots[i] = { col: pick[0], row: pick[1] };
+    });
+
+    // 5. 公園（噴水池佔 2x2 格）：找城市內部最靠近中心、四格都空著的位置
+    const insideList = [...inside].map((k) => k.split(',').map(Number));
+    const cx = insideList.reduce((n, [c]) => n + c, 0) / insideList.length;
+    const cy = insideList.reduce((n, [, r]) => n + r, 0) / insideList.length;
+    let park = null;
+    let best = Infinity;
+    for (const [c, r] of insideList) {
+      const block = [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1]];
+      if (!block.every(([a, b]) => inside.has(key(a, b)) && !taken.has(key(a, b)))) continue;
+      const d = (c + 0.5 - cx) ** 2 + (r + 0.5 - cy) ** 2;
+      if (d < best) { best = d; park = { col: c, row: r }; }
+    }
+    if (park) [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([a, b]) => taken.add(key(park.col + a, park.row + b)));
+
+    this.board = { path, land, inside, lots, park, taken, minC, maxC, minR, maxR, key };
+  }
+
   // ---------- 座標 ----------
-  // 第 i 格在 6x6 外圈的 (col,row)。0 在「前方」角落，逆時針走一圈。
+  // 第 i 格在地圖上的 (col,row)
   ringCell(i) {
-    if (i <= 5) return { col: 5 - i, row: 5 };
-    if (i <= 10) return { col: 0, row: 5 - (i - 5) };
-    if (i <= 15) return { col: i - 10, row: 0 };
-    return { col: 5, row: i - 15 };
+    return this.board.path[i];
   }
 
   // 方格 (col,row) → 螢幕上菱形中心點
@@ -82,14 +157,9 @@ class GameScene extends Phaser.Scene {
     return this.iso(col, row);
   }
 
-  // 地產旁邊的空地（在道路外側）
+  // 地標/里長旁邊的空地
   lotCell(i) {
-    const { col, row } = this.ringCell(i);
-    if (row === 5 && col > 0 && col < 5) return { col, row: 6 };
-    if (col === 0 && row > 0 && row < 5) return { col: -1, row };
-    if (row === 0 && col > 0 && col < 5) return { col, row: -1 };
-    if (col === 5 && row > 0 && row < 5) return { col: 6, row };
-    return null;
+    return this.board.lots[i] || null;
   }
 
   diamond(g, cx, cy, w, h, fill, alpha = 1) {
@@ -112,125 +182,106 @@ class GameScene extends Phaser.Scene {
   drawWater() {
     // 背景的河水：有 AI 畫的材質就鋪滿並慢慢流動，沒有就畫簡單的波紋
     if (this.textures.exists('bld_water')) {
-      const water = this.add.tileSprite(-800, -900, 3400, 3000, 'bld_water').setOrigin(0).setDepth(-1000);
+      const water = this.add.tileSprite(-1200, -1200, 4800, 4000, 'bld_water').setOrigin(0).setDepth(-1000);
       this.tweens.add({ targets: water, tilePositionX: 128, tilePositionY: 64, duration: 9000, repeat: -1 });
       return;
     }
     const g = this.add.graphics().setDepth(-1000);
     const rnd = new Phaser.Math.RandomDataGenerator(['water']);
-    for (let k = 0; k < 160; k++) {
-      const x = rnd.between(-400, 1700);
-      const y = rnd.between(-300, 1100);
+    for (let k = 0; k < 300; k++) {
       g.fillStyle(0x6fa3d6, 0.8);
-      g.fillRect(x, y, rnd.between(12, 36), 4);
+      g.fillRect(rnd.between(-800, 2600), rnd.between(-600, 1800), rnd.between(12, 36), 4);
     }
   }
 
   drawGround() {
+    const { land, key, park } = this.board;
     const g = this.add.graphics().setDepth(-900);
+    const sides = this.add.graphics().setDepth(-950);
     const rnd = new Phaser.Math.RandomDataGenerator(['grass']);
-    // 島的側面（土和石頭），讓地圖看起來像一塊浮起來的地
-    const left = this.iso(MAP_MIN, MAP_MAX + 1);
-    const bottom = this.iso(MAP_MAX + 1, MAP_MAX + 1);
-    const right = this.iso(MAP_MAX + 1, MAP_MIN);
-    const L = { x: left.x, y: left.y - ISO_H / 2 };
-    const B = { x: bottom.x, y: bottom.y - ISO_H / 2 };
-    const R = { x: right.x, y: right.y - ISO_H / 2 };
-    g.fillStyle(0x8a5a33, 1);
-    g.fillPoints([L, B, { x: B.x, y: B.y + 40 }, { x: L.x, y: L.y + 40 }], true);
-    g.fillStyle(0x6b4226, 1);
-    g.fillPoints([B, R, { x: R.x, y: R.y + 40 }, { x: B.x, y: B.y + 40 }], true);
-    g.fillStyle(0x9e9e9e, 1);
-    g.fillPoints([L, B, { x: B.x, y: B.y + 8 }, { x: L.x, y: L.y + 8 }], true);
-    g.fillStyle(0x7d7d7d, 1);
-    g.fillPoints([B, R, { x: R.x, y: R.y + 8 }, { x: B.x, y: B.y + 8 }], true);
-
-    for (let col = MAP_MIN; col <= MAP_MAX; col++) {
-      for (let row = MAP_MIN; row <= MAP_MAX; row++) {
-        const { x, y } = this.iso(col, row);
-        if (this.textures.exists('bld_grass_tile')) {
-          this.add.image(x, y, 'bld_grass_tile').setDepth(-899);
-          continue;
-        }
-        const shade = (col + row) % 2 === 0 ? 0x5fb34a : 0x56a843;
-        this.diamond(g, x, y, ISO_W, ISO_H, shade);
-        // 草的小點
-        for (let k = 0; k < 6; k++) {
-          g.fillStyle(rnd.frac() < 0.5 ? 0x7bc85f : 0x479135, 1);
-          g.fillRect(x + rnd.between(-36, 32), y + rnd.between(-12, 10), 4, 4);
-        }
+    const textured = this.textures.exists('bld_grass_tile');
+    for (const k of land) {
+      const [col, row] = k.split(',').map(Number);
+      const { x, y } = this.iso(col, row);
+      // 海岸：前面（右下、左下）沒有陸地的邊，畫出土和石頭的側面，像一塊浮在水上的地
+      const R = { x: x + ISO_W / 2, y };
+      const B = { x, y: y + ISO_H / 2 };
+      const L = { x: x - ISO_W / 2, y };
+      if (!land.has(key(col + 1, row))) {
+        sides.fillStyle(0x6b4226, 1).fillPoints([R, B, { x: B.x, y: B.y + 40 }, { x: R.x, y: R.y + 40 }], true);
+        sides.fillStyle(0x7d7d7d, 1).fillPoints([R, B, { x: B.x, y: B.y + 8 }, { x: R.x, y: R.y + 8 }], true);
+      }
+      if (!land.has(key(col, row + 1))) {
+        sides.fillStyle(0x8a5a33, 1).fillPoints([L, B, { x: B.x, y: B.y + 40 }, { x: L.x, y: L.y + 40 }], true);
+        sides.fillStyle(0x9e9e9e, 1).fillPoints([L, B, { x: B.x, y: B.y + 8 }, { x: L.x, y: L.y + 8 }], true);
+      }
+      if (textured) {
+        this.add.image(x, y, 'bld_grass_tile').setDepth(-899);
+        continue;
+      }
+      this.diamond(g, x, y, ISO_W, ISO_H, (col + row) % 2 === 0 ? 0x5fb34a : 0x56a843);
+      for (let n = 0; n < 6; n++) {
+        g.fillStyle(rnd.frac() < 0.5 ? 0x7bc85f : 0x479135, 1);
+        g.fillRect(x + rnd.between(-36, 32), y + rnd.between(-12, 10), 4, 4);
       }
     }
-    // 中間公園的步道和噴水池
-    const c = this.iso(2.5, 2.5);
-    if (this.textures.exists('bld_fountain')) {
-      // AI 噴水池：底下的菱形地面剛好蓋住中間 2x2 格
-      const f = this.add.image(c.x, c.y + ISO_H + 2, 'bld_fountain').setOrigin(0.5, 1);
-      f.setScale((ISO_W * 2 + 4) / f.width).setDepth(c.y);
-      return;
+    // 城市中間的公園噴水池（佔 2x2 格）
+    if (park) {
+      const c = this.iso(park.col + 0.5, park.row + 0.5);
+      if (this.textures.exists('bld_fountain')) {
+        const f = this.add.image(c.x, c.y + ISO_H + 2, 'bld_fountain').setOrigin(0.5, 1);
+        f.setScale((ISO_W * 2 + 4) / f.width).setDepth(c.y);
+      } else {
+        this.diamond(g, c.x, c.y, ISO_W * 1.8, ISO_H * 1.8, 0xd9c7a3);
+        this.diamond(g, c.x, c.y, ISO_W * 0.9, ISO_H * 0.9, 0x29adff);
+      }
     }
-    this.diamond(g, c.x, c.y, ISO_W * 2.4, ISO_H * 2.4, 0xd9c7a3);
-    this.diamond(g, c.x, c.y, ISO_W * 1.2, ISO_H * 1.2, 0xbfae8a);
-    this.diamond(g, c.x, c.y, ISO_W * 0.9, ISO_H * 0.9, 0x29adff);
-    this.diamond(g, c.x, c.y, ISO_W * 0.5, ISO_H * 0.5, 0x8fd3ff);
-    const fountain = this.add.graphics().setDepth(c.y);
-    fountain.fillStyle(0xc2c3c7, 1);
-    fountain.fillRect(c.x - 6, c.y - 30, 12, 30);
-    fountain.fillStyle(0xfff1e8, 1);
-    fountain.fillRect(c.x - 4, c.y - 44, 8, 14);
-    const spray = this.add.rectangle(c.x, c.y - 52, 20, 8, 0xdff4ff).setDepth(c.y + 1);
-    this.tweens.add({ targets: spray, scaleX: 1.6, alpha: 0.4, duration: 500, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3] });
   }
 
   drawRoad() {
     const g = this.add.graphics().setDepth(-800);
+    this.roadMarkers = [];
     TILES.forEach((t, i) => {
       const { x, y } = this.tileCenter(i);
-      const corner = i % 5 === 0;
+      const special = FULL_TILE_TYPES.includes(t.type);
       // 路面：有 AI 柏油路就用，沒有就畫灰色菱形
       if (this.textures.exists('bld_road_tile')) {
         this.add.image(x, y, 'bld_road_tile').setDepth(-801);
         this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30, 0.5);
       } else {
         this.diamond(g, x, y + 4, ISO_W, ISO_H, 0x3b3b44);
-        this.diamond(g, x, y, ISO_W, ISO_H, corner ? 0xb8a98a : 0x5a5a66);
-        this.diamond(g, x, y, ISO_W - 14, ISO_H - 7, corner ? 0xd6c6a0 : 0x6b6b78);
+        this.diamond(g, x, y, ISO_W, ISO_H, special ? 0xb8a98a : 0x5a5a66);
         this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30);
       }
-      // 地產格的小色塊：還沒人買是灰色，買下後換成地主的顏色（在 refreshTile 畫）
-      if (t.type === 'property') {
-        this.roadMarkers = this.roadMarkers || [];
+      // 地標、里長格：路上的小色塊（還沒人買是灰色，買下後換成地主的顏色，在 refreshTile 畫）
+      if (t.type === 'property' || t.type === 'chief') {
         this.roadMarkers[i] = this.add.graphics().setDepth(-799);
+        return;
       }
-      // 機會 / 命運 / 角落：在路上放大圖示
-      if (t.type !== 'property') {
-        const big = corner;
-        let ic;
-        if (this.textures.exists(`bld_${t.icon}`) && big) {
-          // 角落：AI 圖底下是一塊路面，直接蓋在這格上
-          ic = this.add.image(x, y + ISO_H / 2 + 2, `bld_${t.icon}`).setOrigin(0.5, 1);
-          ic.setScale((ISO_W + 4) / ic.width);
-        } else if (this.textures.exists(`bld_${t.icon}`)) {
-          // 機會/命運：浮在路上的小東西
-          ic = addIcon(this, x, y + 8, t.icon, 64).setOrigin(0.5, 1);
-          this.tweens.add({ targets: ic, y: y + 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        } else {
-          ic = this.add.image(x, y + 6, t.icon).setOrigin(0.5, 1).setScale(big ? 3.5 : 3);
-        }
-        ic.setDepth(y - 10);
-        this.add.text(x, y + 12, t.name, {
-          fontFamily: FONT, fontSize: '20px', color: '#ffffff', stroke: '#000000', strokeThickness: 6,
-        }).setOrigin(0.5, 0).setDepth(y + 200);
+      // 其他格子：在路上放圖示
+      let ic;
+      if (this.textures.exists(`bld_${t.icon}`) && special) {
+        // 起點、塞車、捷運、拖吊、政壇人物：AI 圖底下有一塊地面，直接蓋在這格上
+        ic = this.add.image(x, y + ISO_H / 2 + 2, `bld_${t.icon}`).setOrigin(0.5, 1);
+        ic.setScale((ISO_W + 4) / ic.width);
+      } else if (this.textures.exists(`bld_${t.icon}`)) {
+        // 機會/命運：浮在路上的小東西
+        ic = addIcon(this, x, y + 8, t.icon, 64).setOrigin(0.5, 1);
+        this.tweens.add({ targets: ic, y: y + 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        ic = this.add.image(x, y + 6, this.textures.exists(t.icon) ? t.icon : 'chance').setOrigin(0.5, 1).setScale(3);
       }
+      ic.setDepth(y - 10);
+      this.add.text(x, y + 12, t.name, {
+        fontFamily: FONT, fontSize: '20px', color: '#ffffff', stroke: '#000000', strokeThickness: 6,
+      }).setOrigin(0.5, 0).setDepth(y + 200);
     });
-    // 道路中線虛線（只畫在一般格之間）
+    // 道路中線虛線（畫在相鄰兩格中間）
     g.fillStyle(0xffec27, 1);
     for (let i = 0; i < TILES.length; i++) {
       const a = this.tileCenter(i);
       const b = this.tileCenter((i + 1) % TILES.length);
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-      g.fillRect(mx - 6, my - 2, 12, 4);
+      g.fillRect((a.x + b.x) / 2 - 6, (a.y + b.y) / 2 - 2, 12, 4);
     }
   }
 
@@ -238,34 +289,37 @@ class GameScene extends Phaser.Scene {
     this.lotOverlays = [];
     const g = this.add.graphics().setDepth(-700);
     TILES.forEach((t, i) => {
-      if (t.type !== 'property') return;
+      if (t.type !== 'property' && t.type !== 'chief') return;
       const cell = this.lotCell(i);
+      if (!cell) return;
       const { x, y } = this.iso(cell.col, cell.row);
       // 空地：人行磚（有 AI 地磚就用）
       if (this.textures.exists('bld_plaza_tile')) {
         this.add.image(x, y, 'bld_plaza_tile').setDepth(-701).setScale((ISO_W - 8) / ISO_W);
       } else {
         this.diamond(g, x, y, ISO_W - 8, ISO_H - 4, 0xd9cbb0);
-        this.diamond(g, x, y, ISO_W - 24, ISO_H - 12, 0xe8dcc4);
       }
       this.diamondLine(g, x, y, ISO_W - 8, ISO_H - 4, 3, UNOWNED_COLOR);
 
-      // 建築：有 AI 畫的圖就用，沒有就用像素小圖
+      // 建築：有 AI 畫的圖就用，沒有就用像素小圖。里長辦公處比地標小一點
       let bld;
+      const wid = t.type === 'chief' ? ISO_W - 34 : ISO_W - 6;
       if (this.textures.exists(`bld_${t.icon}`)) {
-        // AI 圖的底部是一塊菱形地面，對齊空地的菱形
-        bld = this.add.image(x, y + ISO_H / 2 - 2, `bld_${t.icon}`).setOrigin(0.5, 1);
-        bld.setScale((ISO_W - 6) / bld.width);
+        bld = this.add.image(x, y + ISO_H / 2 - 2 - (t.type === 'chief' ? 10 : 0), `bld_${t.icon}`).setOrigin(0.5, 1);
+        bld.setScale(wid / bld.width);
       } else {
-        bld = this.add.image(x, y + 14, t.icon).setOrigin(0.5, 1).setScale(t.icon === 'taipei101' ? 7 : 5.5);
+        bld = this.add.image(x, y + 14, this.textures.exists(t.icon) ? t.icon : 'station').setOrigin(0.5, 1).setScale(t.icon === 'taipei101' ? 7 : 5);
       }
       bld.setDepth(y + 20);
 
-      // 建築名牌：設定 SHOW_BUILDING_NAMES = true 可以再打開（點建築一樣能看名字和價錢）
-      if (SHOW_BUILDING_NAMES) {
+      // 里長格：在地上標出行政區名字，看地圖就知道在哪一區
+      if (t.type === 'chief') {
+        this.add.text(x, y + 14, t.district, {
+          fontFamily: FONT, fontSize: '16px', color: '#ffffff', backgroundColor: '#1d2b53cc', padding: { x: 4, y: 1 },
+        }).setOrigin(0.5, 0).setDepth(y + 21); // 在建築前面、但在路上的角色後面
+      } else if (SHOW_BUILDING_NAMES) {
         this.add.text(x, y + 22, t.name, {
-          fontFamily: FONT, fontSize: '18px', color: '#ffffff', backgroundColor: '#1d2b53',
-          padding: { x: 6, y: 2 },
+          fontFamily: FONT, fontSize: '18px', color: '#ffffff', backgroundColor: '#1d2b53', padding: { x: 6, y: 2 },
         }).setOrigin(0.5, 0).setDepth(y + 300);
       }
 
@@ -273,7 +327,7 @@ class GameScene extends Phaser.Scene {
       this.lotOverlays[i] = this.add.container(x, y).setDepth(y + 25);
 
       // 點建築看資訊（拖曳地圖時不算）
-      bld.setInteractive({ pixelPerfect: false });
+      bld.setInteractive();
       bld.on('pointerup', (p) => {
         if (p.getDistance() < 12) this.showTileInfo(i);
       });
@@ -281,31 +335,18 @@ class GameScene extends Phaser.Scene {
   }
 
   drawTrees() {
+    const { land, inside, taken, key } = this.board;
     const rnd = new Phaser.Math.RandomDataGenerator(['trees']);
-    const used = new Set();
-    TILES.forEach((t, i) => {
-      const lc = this.lotCell(i);
-      if (lc) used.add(`${lc.col},${lc.row}`);
-      const rc = this.ringCell(i);
-      used.add(`${rc.col},${rc.row}`);
-    });
-    const spots = [];
-    for (let col = MAP_MIN; col <= MAP_MAX; col++) {
-      for (let row = MAP_MIN; row <= MAP_MAX; row++) {
-        if (used.has(`${col},${row}`)) continue;
-        // 斜 45 度的畫面裡，樹會擋住「在它後面（左上方）」的東西。
-        // 後面緊鄰的是路或建築的話就不種樹，免得擋住角色和建築
-        if (used.has(`${col - 1},${row}`) || used.has(`${col},${row - 1}`) || used.has(`${col - 1},${row - 1}`)) continue;
-        const inPark = col >= 1 && col <= 4 && row >= 1 && row <= 4;
-        const nearFountain = col >= 2 && col <= 3 && row >= 2 && row <= 3;
-        if (nearFountain) continue;
-        if (rnd.frac() < (inPark ? 0.6 : 0.8)) spots.push({ col, row });
-      }
-    }
-    for (const s of spots) {
+    for (const k of land) {
+      if (taken.has(k)) continue;
+      const [col, row] = k.split(',').map(Number);
+      // 斜 45 度的畫面裡，樹會擋住「在它後面（左上方）」的東西。
+      // 後面緊鄰的是路、建築或公園的話就不種樹，免得擋住
+      if (taken.has(key(col - 1, row)) || taken.has(key(col, row - 1)) || taken.has(key(col - 1, row - 1))) continue;
+      if (rnd.frac() > (inside.has(k) ? 0.55 : 0.75)) continue;
       const n = rnd.between(1, 2);
-      for (let k = 0; k < n; k++) {
-        const { x, y } = this.iso(s.col, s.row);
+      for (let m = 0; m < n; m++) {
+        const { x, y } = this.iso(col, row);
         this.drawTree(x + rnd.between(-26, 26), y + rnd.between(-8, 8), rnd);
       }
     }
@@ -369,7 +410,13 @@ class GameScene extends Phaser.Scene {
   // ---------- 鏡頭 ----------
   setupCamera() {
     const cam = this.cameras.main;
-    cam.setBounds(-300, -420, 1880, 1640);
+    // 鏡頭可以移動的範圍：整塊陸地再往外留一些
+    const pts = [...this.board.land].map((k) => { const [c, r] = k.split(',').map(Number); return this.iso(c, r); });
+    const minX = Math.min(...pts.map((q) => q.x)) - 500;
+    const maxX = Math.max(...pts.map((q) => q.x)) + 500;
+    const minY = Math.min(...pts.map((q) => q.y)) - 600;
+    const maxY = Math.max(...pts.map((q) => q.y)) + 600;
+    cam.setBounds(minX, minY, maxX - minX, maxY - minY);
     cam.setZoom(ZOOM.start);
     this.dragging = false;
     this.input.addPointer(1); // 允許兩指（縮放用）
@@ -498,16 +545,24 @@ class GameScene extends Phaser.Scene {
     this.followPlayer(p);
     this.bounceToken(p);
 
+    // 【A】每回合開始，自己的地標和里長會帶來支持者
+    const income = this.fansIncomeOf(p);
+    let incomeMsg = '';
+    if (income > 0) {
+      this.changeFans(p, income);
+      incomeMsg = `\n地盤帶來支持者 +${income}`;
+    }
+
     if (p.skip > 0) {
       p.skip--;
-      this.hud.say(`${p.name} 還卡在車陣裡…\n這回合暫停一次`);
+      this.hud.say(`${p.name} 還卡在車陣裡…\n這回合暫停一次${incomeMsg}`);
       Sfx.bad();
       this.hud.refreshPanels();
       await this.hud.choose([{ label: '好吧', value: 1 }], p, 1);
       return;
     }
 
-    this.hud.say(p.human ? `輪到 ${p.name}！\n按「擲骰子」出發` : `輪到 ${p.name}（電腦）…`);
+    this.hud.say(p.human ? `輪到 ${p.name}！按「擲骰子」出發${incomeMsg}` : `輪到 ${p.name}（電腦）…${incomeMsg}`);
     await this.hud.choose([{ label: '擲骰子', value: 1, fill: 0xff004d }], p, 1);
     this.followPlayer(p);
     const roll = await this.hud.rollDice();
@@ -557,18 +612,41 @@ class GameScene extends Phaser.Scene {
   }
 
   // ---------- 錢 ----------
+  // 過路費（錢）
   rentOf(i) {
     const t = TILES[i];
     const st = this.tileState[i];
+    if (t.type === 'chief') return Math.round(t.price * GAME_RULES.chiefRentRate);
     let base = Math.round(t.price / 10);
-    if (st.level === 0 && this.ownsGroup(st.owner, t.group)) base *= 2;
+    if (st.level === 0 && this.ownsDistrict(st.owner, t.district)) base *= 2;
     return base * GAME_RULES.rentMultiplier[st.level];
+  }
+
+  // 【B】對手踩到時，倒戈過來的支持者
+  stealOf(i) {
+    const t = TILES[i];
+    const st = this.tileState[i];
+    if (t.type === 'chief') return GAME_RULES.chiefSteal;
+    return Math.round(t.price * GAME_RULES.landmarkStealRate * (st.level + 1));
+  }
+
+  // 【A】這格每回合帶給地主的支持者
+  fansPerTurnOf(i) {
+    const t = TILES[i];
+    const st = this.tileState[i];
+    if (t.type === 'chief') return GAME_RULES.chiefFansPerTurn;
+    return Math.round(t.price * GAME_RULES.landmarkFansRate * (st.level + 1));
+  }
+
+  fansIncomeOf(p) {
+    return this.tileState.reduce((n, s, i) => n + (s.owner === p.id ? this.fansPerTurnOf(i) : 0), 0);
   }
 
   upgradeCost(i) { return Math.round(TILES[i].price / 2); }
 
-  ownsGroup(owner, group) {
-    return TILES.every((t, i) => t.group !== group || this.tileState[i].owner === owner);
+  // 是否拿下整個行政區（這區的地標和里長全部都買下）
+  ownsDistrict(owner, district) {
+    return TILES.every((t, i) => t.district !== district || this.tileState[i].owner === owner);
   }
 
   assetsOf(p) {
@@ -644,6 +722,20 @@ class GameScene extends Phaser.Scene {
         else if (st.owner === p.id) await this.offerUpgrade(p, i);
         else await this.payRent(p, i);
         break;
+      case 'chief':
+        if (st.owner === null) await this.offerBuy(p, i);
+        else if (st.owner === p.id) {
+          this.hud.say(`${t.name} 是自己人，\n里民服務做得好，口碑不錯！`);
+          await this.wait(1000);
+        } else await this.payRent(p, i);
+        break;
+      case 'talent':
+        // 戰將功能做好前的暫時效果
+        this.hud.say(`${p.name} 遇到政壇前輩，\n傳授選戰心法！`);
+        await this.wait(500);
+        this.changeFans(p, GAME_RULES.talentFans);
+        await this.wait(900);
+        break;
       case 'chance':
         await this.drawCard(p, 'chance');
         break;
@@ -675,10 +767,11 @@ class GameScene extends Phaser.Scene {
   async offerBuy(p, i) {
     const t = TILES[i];
     const canBuy = p.money >= t.price;
-    this.hud.say(`${t.name} 還沒有人插旗！\n要花 $${t.price} 買下嗎？${canBuy ? '' : '\n（錢不夠…）'}`);
+    const what = t.type === 'chief' ? `拉攏 ${t.name}` : `買下 ${t.name}`;
+    this.hud.say(`${t.name} 還沒有人插旗！\n要花 $${t.price} ${what} 嗎？${canBuy ? '' : '\n（錢不夠…）'}`);
     const autoBuy = canBuy && p.money - t.price >= 200;
     const ans = await this.hud.choose([
-      { label: `買下 $${t.price}`, value: true, fill: 0x00e436, disabled: !canBuy },
+      { label: `${t.type === 'chief' ? '拉攏' : '買下'} $${t.price}`, value: true, fill: 0x00e436, disabled: !canBuy },
       { label: '不買', value: false, fill: 0xc2c3c7 },
     ], p, autoBuy);
     if (ans) {
@@ -687,8 +780,10 @@ class GameScene extends Phaser.Scene {
       this.refreshTile(i);
       Sfx.buy();
       this.flashTile(i);
-      const gain = this.changeFans(p, t.price * GAME_RULES.buyFansRate, true);
-      this.hud.say(`${p.name} 買下了 ${t.name}！\n支持者 +${gain}，過路費 $${this.rentOf(i)}`);
+      const gain = this.changeFans(p, t.type === 'chief' ? GAME_RULES.chiefBuyFans : Math.round(t.price * GAME_RULES.buyFansRate), true);
+      this.hud.say(t.type === 'chief'
+        ? `${p.name} 拉攏了 ${t.name}！\n支持者 +${gain}，之後每回合 +${this.fansPerTurnOf(i)}`
+        : `${p.name} 買下了 ${t.name}！\n支持者 +${gain}，過路費 $${this.rentOf(i)}`);
       this.hud.refreshPanels();
       await this.wait(1000);
     } else {
@@ -719,7 +814,7 @@ class GameScene extends Phaser.Scene {
       this.refreshTile(i);
       Sfx.buy();
       this.flashTile(i);
-      const gain = this.changeFans(p, t.price * GAME_RULES.buildFansRate, true);
+      const gain = this.changeFans(p, Math.round(t.price * GAME_RULES.buildFansRate), true);
       this.hud.say(`${t.name} 蓋好第 ${st.level} 層競選總部！\n支持者 +${gain}，過路費變成 $${this.rentOf(i)}`);
       this.hud.refreshPanels();
       await this.wait(1100);
@@ -729,10 +824,15 @@ class GameScene extends Phaser.Scene {
   async payRent(p, i) {
     const owner = this.players[this.tileState[i].owner];
     const rent = this.rentOf(i);
-    this.hud.say(`${TILES[i].name} 是 ${owner.name} 的地盤！\n付過路費 $${rent}`);
+    const steal = this.stealOf(i);
+    this.hud.say(`${TILES[i].name} 是 ${owner.name} 的地盤！\n付過路費 $${rent}，支持者有 ${steal} 人倒戈`);
     await this.wait(600);
     await this.pay(p, rent, owner);
-    await this.wait(800);
+    if (!p.bankrupt) {
+      const lost = -this.changeFans(p, -steal, true);
+      this.changeFans(owner, lost);
+    }
+    await this.wait(900);
   }
 
   // ---------- 機會 / 命運 ----------
@@ -789,7 +889,8 @@ class GameScene extends Phaser.Scene {
       await this.wait(1000);
     }
     if (card.jam) {
-      const steps = (5 - p.pos + TILES.length) % TILES.length;
+      const jamAt = TILES.findIndex((t) => t.type === 'jam');
+      const steps = (jamAt - p.pos + TILES.length) % TILES.length;
       await this.walk(p, steps);
       p.skip = 1;
       this.hud.refreshPanels();
@@ -804,7 +905,13 @@ class GameScene extends Phaser.Scene {
       return;
     }
     if (card.goto !== undefined) {
-      await this.goTo(p, card.goto);
+      // 往前走到「下一個」這種格子
+      let target = p.pos;
+      for (let k = 1; k <= TILES.length; k++) {
+        const j = (p.pos + k) % TILES.length;
+        if (TILES[j].type === card.goto) { target = j; break; }
+      }
+      await this.goTo(p, target);
       await this.resolveTile(p);
     }
   }
@@ -814,8 +921,12 @@ class GameScene extends Phaser.Scene {
     const t = TILES[i];
     const st = this.tileState[i];
     const owner = st.owner === null ? '還沒有人買' : `地主：${this.players[st.owner].name}`;
-    const rent = st.owner === null ? Math.round(t.price / 10) : this.rentOf(i);
-    this.hud.say(`【${t.name}】價格 $${t.price}\n${owner}\n總部 ${st.level} 層，過路費 $${rent}`);
+    const rent = this.rentOf(i);
+    if (t.type === 'chief') {
+      this.hud.say(`【${t.name}】價格 $${t.price}\n${owner}\n每回合支持者 +${this.fansPerTurnOf(i)}，過路費 $${rent}`);
+      return;
+    }
+    this.hud.say(`【${t.name}】${t.district}・價格 $${t.price}\n${owner}・總部 ${st.level} 層\n每回合支持者 +${this.fansPerTurnOf(i)}，過路費 $${rent}`);
   }
 
   // ---------- 遊戲結束 ----------

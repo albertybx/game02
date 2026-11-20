@@ -6,47 +6,76 @@ const GAME_RULES = {
   passGoBonus: 200,   // 經過起點拿的錢
   maxRounds: 20,      // 第幾回合結束就是「投票日」，比誰的支持者最多
   startFans: 1000,    // 每人一開始的支持者
-  // 【暫定】地標帶來的支持者（之後討論好再調整）
-  buyFansRate: 2,     // 買下地標：支持者 + 價錢 × 2
-  buildFansRate: 1,   // 蓋一層競選總部：支持者 + 價錢 × 1
-  maxLevel: 3,        // 競選總部最多蓋幾層
-  rentMultiplier: [1, 4, 10, 20], // 0~3 層時，過路費是基本過路費的幾倍
+  maxLevel: 3,        // 地標的競選總部最多蓋幾層
+  rentMultiplier: [1, 4, 10, 20], // 地標 0~3 層時，過路費是基本過路費的幾倍
   towFine: 100,       // 拖吊場罰款
+
+  // ---- 地標（賺錢為主，也帶來一些支持者）----
+  buyFansRate: 0.5,     // 買下地標：支持者 + 價錢 × 0.5
+  buildFansRate: 0.5,   // 蓋一層競選總部：支持者 + 價錢 × 0.5
+  landmarkFansRate: 0.1, // 【A】每回合開始：每個地標帶來 價錢 × 0.1 ×（總部層數 + 1）位支持者
+  landmarkStealRate: 0.2, // 【B】對手踩到你的地標：倒戈 價錢 × 0.2 ×（總部層數 + 1）位支持者
+
+  // ---- 里長（便宜、過路費低，但帶來比較多支持者）----
+  chiefBuyFans: 300,    // 買下里長：支持者 + 300
+  chiefFansPerTurn: 60, // 【A】每回合開始：每位里長帶來 60 位支持者
+  chiefSteal: 80,       // 【B】對手踩到你的里長格：倒戈 80 位支持者
+  chiefRentRate: 0.1,   // 里長格過路費：價錢 × 0.1
+
+  talentFans: 150,      // 政壇人物格（戰將功能做好前的暫時效果）：支持者 + 150
 };
 
-// 地產顏色組（同一組全部買下，空地過路費加倍）
-const GROUPS = {
-  brown:  '#ab5236',
-  sky:    '#29adff',
-  pink:   '#ff77a8',
-  orange: '#ffa300',
-  red:    '#ff004d',
-  navy:   '#1d2b53',
-};
+// 台北市 12 個行政區（地標和里長都屬於某一區；同一區全部買下，地標空地過路費加倍）
+const DISTRICTS = ['中正區', '大安區', '文山區', '信義區', '南港區', '內湖區', '松山區', '中山區', '士林區', '北投區', '大同區', '萬華區'];
 
-// 地圖 20 格，從右下角「起點」開始，逆時針走一圈。
-// type: go 起點 / property 地產 / chance 機會 / fate 命運 / jam 塞車 / mrt 捷運站 / tow 拖吊場
+// 地圖路線：台北市的形狀（北邊是士林、北投，東邊是內湖、南港，南邊是文山，西邊是萬華、大同）。
+// 每個點是一個轉彎處 [col, row]，路線會照順序一格一格連起來，最後回到第一個點。
+// 路線總長度要剛好等於 TILES 的格數（36 格）。
+const MAP_ROUTE = [
+  [2, 7], [2, 9], [5, 9], [5, 11], [8, 11], [8, 9], [10, 9],
+  [10, 5], [6, 5], [6, 1], [3, 1], [3, 4], [2, 4],
+];
+
+// 地圖 36 格，從「起點」（台北車站旁）出發。
+// type: go 起點 / property 地標 / chief 里長 / chance 機會 / fate 命運 / talent 政壇人物
+//       / jam 塞車 / mrt 捷運站 / tow 拖吊場
 const TILES = [
-  { type: 'go',       name: '起點',       icon: 'go' },
-  { type: 'property', name: '龍山寺',     icon: 'longshan',     price: 60,  group: 'brown' },
-  { type: 'chance',   name: '機會',       icon: 'chance' },
-  { type: 'property', name: '西門紅樓',   icon: 'redhouse',     price: 60,  group: 'brown' },
-  { type: 'property', name: '台北車站',   icon: 'station',      price: 100, group: 'sky' },
-  { type: 'jam',      name: '塞車',       icon: 'jam' },
-  { type: 'property', name: '北投溫泉',   icon: 'beitou',       price: 120, group: 'sky' },
-  { type: 'fate',     name: '命運',       icon: 'ballot' },
-  { type: 'property', name: '士林夜市',   icon: 'nightmarket',  price: 140, group: 'pink' },
-  { type: 'property', name: '故宮',       icon: 'palace',       price: 160, group: 'pink' },
-  { type: 'mrt',      name: '捷運站',     icon: 'mrt' },
-  { type: 'property', name: '圓山飯店',   icon: 'grandhotel',   price: 180, group: 'orange' },
-  { type: 'chance',   name: '機會',       icon: 'chance' },
-  { type: 'property', name: '小巨蛋',     icon: 'arena',        price: 200, group: 'orange' },
-  { type: 'property', name: '國父紀念館', icon: 'sunyatsen',    price: 220, group: 'red' },
-  { type: 'tow',      name: '拖吊場',     icon: 'siren' },
-  { type: 'property', name: '中正紀念堂', icon: 'cks',          price: 240, group: 'red' },
-  { type: 'fate',     name: '命運',       icon: 'ballot' },
-  { type: 'property', name: '總統府',     icon: 'presidential', price: 300, group: 'navy' },
-  { type: 'property', name: '台北101',    icon: 'taipei101',    price: 350, group: 'navy' },
+  { type: 'go',       name: '起點',         icon: 'go' },
+  { type: 'property', name: '台北車站',     icon: 'station',      price: 100, district: '中正區' },
+  { type: 'chief',    name: '中正區里長',   icon: 'chief',        price: 120, district: '中正區' },
+  { type: 'property', name: '總統府',       icon: 'presidential', price: 300, district: '中正區' },
+  { type: 'chance',   name: '機會',         icon: 'chance' },
+  { type: 'property', name: '中正紀念堂',   icon: 'cks',          price: 240, district: '中正區' },
+  { type: 'chief',    name: '大安區里長',   icon: 'chief',        price: 140, district: '大安區' },
+  { type: 'fate',     name: '命運',         icon: 'ballot' },
+  { type: 'chief',    name: '文山區里長',   icon: 'chief',        price: 90,  district: '文山區' },
+  { type: 'jam',      name: '塞車',         icon: 'jam' },
+  { type: 'property', name: '國父紀念館',   icon: 'sunyatsen',    price: 220, district: '信義區' },
+  { type: 'chief',    name: '信義區里長',   icon: 'chief',        price: 140, district: '信義區' },
+  { type: 'property', name: '台北101',      icon: 'taipei101',    price: 350, district: '信義區' },
+  { type: 'talent',   name: '政壇人物',     icon: 'talent' },
+  { type: 'chief',    name: '南港區里長',   icon: 'chief',        price: 90,  district: '南港區' },
+  { type: 'chance',   name: '機會',         icon: 'chance' },
+  { type: 'chief',    name: '內湖區里長',   icon: 'chief',        price: 110, district: '內湖區' },
+  { type: 'fate',     name: '命運',         icon: 'ballot' },
+  { type: 'mrt',      name: '捷運站',       icon: 'mrt' },
+  { type: 'property', name: '小巨蛋',       icon: 'arena',        price: 200, district: '松山區' },
+  { type: 'chief',    name: '松山區里長',   icon: 'chief',        price: 110, district: '松山區' },
+  { type: 'property', name: '圓山飯店',     icon: 'grandhotel',   price: 180, district: '中山區' },
+  { type: 'chief',    name: '中山區里長',   icon: 'chief',        price: 120, district: '中山區' },
+  { type: 'chance',   name: '機會',         icon: 'chance' },
+  { type: 'property', name: '故宮',         icon: 'palace',       price: 160, district: '士林區' },
+  { type: 'property', name: '士林夜市',     icon: 'nightmarket',  price: 140, district: '士林區' },
+  { type: 'chief',    name: '士林區里長',   icon: 'chief',        price: 100, district: '士林區' },
+  { type: 'tow',      name: '拖吊場',       icon: 'siren' },
+  { type: 'property', name: '北投溫泉',     icon: 'beitou',       price: 120, district: '北投區' },
+  { type: 'chief',    name: '北投區里長',   icon: 'chief',        price: 90,  district: '北投區' },
+  { type: 'talent',   name: '政壇人物',     icon: 'talent' },
+  { type: 'chief',    name: '大同區里長',   icon: 'chief',        price: 80,  district: '大同區' },
+  { type: 'fate',     name: '命運',         icon: 'ballot' },
+  { type: 'property', name: '西門紅樓',     icon: 'redhouse',     price: 60,  district: '萬華區' },
+  { type: 'property', name: '龍山寺',       icon: 'longshan',     price: 60,  district: '萬華區' },
+  { type: 'chief',    name: '萬華區里長',   icon: 'chief',        price: 80,  district: '萬華區' },
 ];
 
 // 角色：目前是虛構的「政治人物」角色。
@@ -64,7 +93,7 @@ const CHARACTERS = [
 //   fansFromEach: 從每位對手身上拉走多少支持者
 //   money: 拿到(正數)或付出(負數)多少錢
 //   move: 前進(正)或後退(負)幾格
-//   goto: 直接走到第幾格（會經過起點就領錢）
+//   goto: 直接走到某種格子，例如 'mrt' 捷運站、'go' 起點（會經過起點就領錢）
 //   jam: 直接去塞車格並暫停一回合
 //   fromEach: 每位對手付你多少錢
 //   perLevel: 每一層競選總部要付多少錢
@@ -72,8 +101,8 @@ const CHANCE_CARDS = [
   { text: '政見發表會大成功！\n小額捐款湧入，獲得 $150', money: 150 },
   { text: '上政論節目爆紅，\n通告費 $100 入袋', money: 100 },
   { text: '掃街拜票握手握到手痠，\n前進 3 格', move: 3 },
-  { text: '搭捷運去下一個行程，\n直接前往捷運站', goto: 10 },
-  { text: '回到起點重新拉票，\n前往起點', goto: 0 },
+  { text: '搭捷運去下一個行程，\n直接前往捷運站', goto: 'mrt' },
+  { text: '回到起點重新拉票，\n前往起點', goto: 'go' },
   { text: '電視辯論表現亮眼！\n每位對手付你 $30', fromEach: 30 },
   { text: '政見影片在網路爆紅！\n支持者 +300', fans: 300 },
   { text: '參加廟會遶境，跟鄉親搏感情，\n支持者 +200', fans: 200 },
@@ -113,6 +142,8 @@ const BUILDING_IMAGES = {
   cks: 'assets/buildings/cks.png',
   presidential: 'assets/buildings/presidential.png',
   taipei101: 'assets/buildings/taipei101.png',
+  chief: 'assets/buildings/chief.png',     // 里長辦公處（12 區共用）
+  talent: 'assets/buildings/talent.png',   // 政壇人物格（造勢小舞台）
   // 路上的格子和道具
   go: 'assets/buildings/go.png',
   jam: 'assets/buildings/jam.png',
