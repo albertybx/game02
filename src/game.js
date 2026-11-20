@@ -109,7 +109,12 @@ class GameScene extends Phaser.Scene {
 
   // ---------- 畫地圖 ----------
   drawWater() {
-    // 背景的河水波紋（像淡水河）
+    // 背景的河水：有 AI 畫的材質就鋪滿並慢慢流動，沒有就畫簡單的波紋
+    if (this.textures.exists('bld_water')) {
+      const water = this.add.tileSprite(-800, -900, 3400, 3000, 'bld_water').setOrigin(0).setDepth(-1000);
+      this.tweens.add({ targets: water, tilePositionX: 128, tilePositionY: 64, duration: 9000, repeat: -1 });
+      return;
+    }
     const g = this.add.graphics().setDepth(-1000);
     const rnd = new Phaser.Math.RandomDataGenerator(['water']);
     for (let k = 0; k < 160; k++) {
@@ -142,6 +147,10 @@ class GameScene extends Phaser.Scene {
     for (let col = MAP_MIN; col <= MAP_MAX; col++) {
       for (let row = MAP_MIN; row <= MAP_MAX; row++) {
         const { x, y } = this.iso(col, row);
+        if (this.textures.exists('bld_grass_tile')) {
+          this.add.image(x, y, 'bld_grass_tile').setDepth(-899);
+          continue;
+        }
         const shade = (col + row) % 2 === 0 ? 0x5fb34a : 0x56a843;
         this.diamond(g, x, y, ISO_W, ISO_H, shade);
         // 草的小點
@@ -153,6 +162,12 @@ class GameScene extends Phaser.Scene {
     }
     // 中間公園的步道和噴水池
     const c = this.iso(2.5, 2.5);
+    if (this.textures.exists('bld_fountain')) {
+      // AI 噴水池：底下的菱形地面剛好蓋住中間 2x2 格
+      const f = this.add.image(c.x, c.y + ISO_H + 2, 'bld_fountain').setOrigin(0.5, 1);
+      f.setScale((ISO_W * 2 + 4) / f.width).setDepth(c.y);
+      return;
+    }
     this.diamond(g, c.x, c.y, ISO_W * 2.4, ISO_H * 2.4, 0xd9c7a3);
     this.diamond(g, c.x, c.y, ISO_W * 1.2, ISO_H * 1.2, 0xbfae8a);
     this.diamond(g, c.x, c.y, ISO_W * 0.9, ISO_H * 0.9, 0x29adff);
@@ -171,11 +186,16 @@ class GameScene extends Phaser.Scene {
     TILES.forEach((t, i) => {
       const { x, y } = this.tileCenter(i);
       const corner = i % 5 === 0;
-      // 路面
-      this.diamond(g, x, y + 4, ISO_W, ISO_H, 0x3b3b44);
-      this.diamond(g, x, y, ISO_W, ISO_H, corner ? 0xb8a98a : 0x5a5a66);
-      this.diamond(g, x, y, ISO_W - 14, ISO_H - 7, corner ? 0xd6c6a0 : 0x6b6b78);
-      this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30);
+      // 路面：有 AI 柏油路就用，沒有就畫灰色菱形
+      if (this.textures.exists('bld_road_tile')) {
+        this.add.image(x, y, 'bld_road_tile').setDepth(-801);
+        this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30, 0.5);
+      } else {
+        this.diamond(g, x, y + 4, ISO_W, ISO_H, 0x3b3b44);
+        this.diamond(g, x, y, ISO_W, ISO_H, corner ? 0xb8a98a : 0x5a5a66);
+        this.diamond(g, x, y, ISO_W - 14, ISO_H - 7, corner ? 0xd6c6a0 : 0x6b6b78);
+        this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30);
+      }
       // 地產格的小色塊：還沒人買是灰色，買下後換成地主的顏色（在 refreshTile 畫）
       if (t.type === 'property') {
         this.roadMarkers = this.roadMarkers || [];
@@ -220,9 +240,13 @@ class GameScene extends Phaser.Scene {
       if (t.type !== 'property') return;
       const cell = this.lotCell(i);
       const { x, y } = this.iso(cell.col, cell.row);
-      // 空地：人行磚
-      this.diamond(g, x, y, ISO_W - 8, ISO_H - 4, 0xd9cbb0);
-      this.diamond(g, x, y, ISO_W - 24, ISO_H - 12, 0xe8dcc4);
+      // 空地：人行磚（有 AI 地磚就用）
+      if (this.textures.exists('bld_plaza_tile')) {
+        this.add.image(x, y, 'bld_plaza_tile').setDepth(-701).setScale((ISO_W - 8) / ISO_W);
+      } else {
+        this.diamond(g, x, y, ISO_W - 8, ISO_H - 4, 0xd9cbb0);
+        this.diamond(g, x, y, ISO_W - 24, ISO_H - 12, 0xe8dcc4);
+      }
       this.diamondLine(g, x, y, ISO_W - 8, ISO_H - 4, 3, UNOWNED_COLOR);
 
       // 建築：有 AI 畫的圖就用，沒有就用像素小圖
@@ -268,22 +292,35 @@ class GameScene extends Phaser.Scene {
     for (let col = MAP_MIN; col <= MAP_MAX; col++) {
       for (let row = MAP_MIN; row <= MAP_MAX; row++) {
         if (used.has(`${col},${row}`)) continue;
+        // 斜 45 度的畫面裡，樹會擋住「在它後面（左上方）」的東西。
+        // 後面緊鄰的是路或建築的話就不種樹，免得擋住角色和建築
+        if (used.has(`${col - 1},${row}`) || used.has(`${col},${row - 1}`) || used.has(`${col - 1},${row - 1}`)) continue;
         const inPark = col >= 1 && col <= 4 && row >= 1 && row <= 4;
         const nearFountain = col >= 2 && col <= 3 && row >= 2 && row <= 3;
         if (nearFountain) continue;
-        if (rnd.frac() < (inPark ? 0.45 : 0.75)) spots.push({ col, row });
+        if (rnd.frac() < (inPark ? 0.6 : 0.8)) spots.push({ col, row });
       }
     }
     for (const s of spots) {
       const n = rnd.between(1, 2);
       for (let k = 0; k < n; k++) {
         const { x, y } = this.iso(s.col, s.row);
-        this.drawTree(x + rnd.between(-30, 30), y + rnd.between(-10, 10), rnd);
+        this.drawTree(x + rnd.between(-26, 26), y + rnd.between(-8, 8), rnd);
       }
     }
   }
 
   drawTree(x, y, rnd) {
+    const kinds = [['tree1', 58, 6], ['tree2', 88, 2], ['tree3', 32, 4]] // [圖, 高度, 出現機率]
+      .filter(([k]) => this.textures.exists(`bld_${k}`));
+    if (kinds.length) {
+      const total = kinds.reduce((n, k) => n + k[2], 0);
+      let pick = rnd.frac() * total;
+      const [key, h] = kinds.find((k) => (pick -= k[2]) < 0) || kinds[0];
+      const t = addIcon(this, x, y + 4, key, h * rnd.realInRange(0.85, 1.1)).setOrigin(0.5, 1).setDepth(y);
+      if (rnd.frac() < 0.5) t.setFlipX(true);
+      return;
+    }
     const g = this.add.graphics().setDepth(y);
     const s = rnd.between(3, 4); // 像素大小
     const dark = rnd.frac() < 0.5 ? 0x1e7b3a : 0x2a8b46;

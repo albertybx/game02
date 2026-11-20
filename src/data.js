@@ -105,4 +105,13 @@ const BUILDING_IMAGES = {
   chance: 'assets/buildings/chance.png',
   ballot: 'assets/buildings/ballot.png',
   flag: 'assets/buildings/flag.png', // 白色旗子，遊戲裡會染成玩家的顏色
+  // 場地：菱形地板格子、河水、樹、噴水池
+  grass_tile: 'assets/ground/iso_grass.png',
+  road_tile: 'assets/ground/iso_road.png',
+  plaza_tile: 'assets/ground/iso_plaza.png',
+  water: 'assets/ground/water.png',
+  tree1: 'assets/ground/tree1.png',
+  tree2: 'assets/ground/tree2.png',
+  tree3: 'assets/ground/tree3.png',
+  fountain: 'assets/ground/fountain.png',
 };
