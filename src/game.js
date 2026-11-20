@@ -180,7 +180,19 @@ class GameScene extends Phaser.Scene {
       // 機會 / 命運 / 角落：在路上放大圖示
       if (t.type !== 'property') {
         const big = corner;
-        this.add.image(x, y + 6, t.icon).setOrigin(0.5, 1).setScale(big ? 3.5 : 3).setDepth(y - 10);
+        let ic;
+        if (this.textures.exists(`bld_${t.icon}`) && big) {
+          // 角落：AI 圖底下是一塊路面，直接蓋在這格上
+          ic = this.add.image(x, y + ISO_H / 2 + 2, `bld_${t.icon}`).setOrigin(0.5, 1);
+          ic.setScale((ISO_W + 4) / ic.width);
+        } else if (this.textures.exists(`bld_${t.icon}`)) {
+          // 機會/命運：浮在路上的小東西
+          ic = addIcon(this, x, y + 8, t.icon, 64).setOrigin(0.5, 1);
+          this.tweens.add({ targets: ic, y: y + 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        } else {
+          ic = this.add.image(x, y + 6, t.icon).setOrigin(0.5, 1).setScale(big ? 3.5 : 3);
+        }
+        ic.setDepth(y - 10);
         this.add.text(x, y + 12, t.name, {
           fontFamily: FONT, fontSize: '20px', color: '#ffffff', stroke: '#000000', strokeThickness: 6,
         }).setOrigin(0.5, 0).setDepth(y + 200);
@@ -294,10 +306,12 @@ class GameScene extends Phaser.Scene {
     this.diamondLine(g, 0, 0, ISO_W - 8, ISO_H - 4, 6, color);
     ov.add(g);
     // 地主的競選旗（每蓋一層多一支）
-    ov.add(this.add.image(-40, 6, `flag${st.owner}`).setOrigin(0.15, 0.8).setScale(2.5));
-    for (let k = 0; k < st.level; k++) {
-      ov.add(this.add.image(34 - k * 14, 10 + k * 6, `flag${st.owner}`).setOrigin(0.15, 0.8).setScale(2));
-    }
+    const makeFlag = (fx, fy, h) => {
+      if (this.textures.exists('bld_flag')) return addIcon(this, fx, fy, 'flag', h).setOrigin(0.5, 1).setTint(color);
+      return this.add.image(fx, fy, `flag${st.owner}`).setOrigin(0.15, 0.8).setScale(h / 16);
+    };
+    ov.add(makeFlag(-44, 8, 44));
+    for (let k = 0; k < st.level; k++) ov.add(makeFlag(38 - k * 16, 12 + k * 6, 34));
   }
 
   // ---------- 鏡頭 ----------
@@ -342,7 +356,7 @@ class GameScene extends Phaser.Scene {
     this.tokens = this.players.map((p) => {
       const { x, y } = this.tokenPos(p);
       const shadow = this.add.ellipse(x, y, 34, 12, 0x000000, 0.35);
-      const t = this.add.image(x, y, `char${p.id}`).setOrigin(0.5, 0.95).setScale(3.5);
+      const t = addCharacter(this, x, y, p.id, 64).setOrigin(0.5, 0.95);
       t.shadow = shadow;
       t.setDepth(y + 30);
       shadow.setDepth(y + 29);

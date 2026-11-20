@@ -38,7 +38,7 @@ class HudScene extends Phaser.Scene {
       const box = this.add.rectangle(0, 0, pw, 116, COLORS.panel).setOrigin(0).setStrokeStyle(3, 0x000000);
       const band = this.add.rectangle(0, 0, pw, 8, hex(p.color)).setOrigin(0);
       const face = this.add.rectangle(8, 16, 56, 56, 0xfff1e8).setOrigin(0).setStrokeStyle(3, 0x000000);
-      const img = this.add.image(36, 44, `char${i}`).setScale(3);
+      const img = addCharacter(this, 36, 44, i, 52);
       const name = this.add.text(70, 14, p.name, { fontFamily: FONT, fontSize: '20px', color: p.color, stroke: '#000', strokeThickness: 5 });
       const tag = this.add.text(70, 42, p.human ? '玩家' : '電腦', { fontFamily: FONT, fontSize: '16px', color: '#c2c3c7' });
       const money = this.add.text(8, 78, '', { fontFamily: FONT, fontSize: '26px', color: '#ffec27' });
@@ -138,7 +138,7 @@ class HudScene extends Phaser.Scene {
     panel.add(this.add.rectangle(8, 8, 520, 320, 0x000000, 0.6));
     panel.add(this.add.rectangle(0, 0, 520, 320, isChance ? 0xffec27 : 0x29adff).setStrokeStyle(6, 0x000000));
     panel.add(this.add.rectangle(0, -114, 500, 70, isChance ? 0xff004d : 0x1d2b53));
-    panel.add(this.add.image(-200, -114, isChance ? 'chance' : 'ballot').setScale(3.5));
+    panel.add(addIcon(this, -200, -114, isChance ? 'chance' : 'ballot', 60));
     panel.add(this.add.text(0, -114, isChance ? '機會' : '命運', { fontFamily: FONT, fontSize: '44px', color: '#fff1e8' }).setOrigin(0.5));
     panel.add(this.add.text(0, 36, card.text, { fontFamily: FONT, fontSize: '30px', color: '#000000', align: 'center', lineSpacing: 12 }).setOrigin(0.5));
     this.cardLayer.add(panel);
@@ -160,7 +160,7 @@ class HudScene extends Phaser.Scene {
     const layer = this.add.container(0, 0).setDepth(100);
     layer.add(this.add.rectangle(0, 0, W, H, 0x000000, 0.88).setOrigin(0).setInteractive());
     layer.add(this.add.text(W / 2, 140, '★ 投票日 ★', { fontFamily: FONT, fontSize: '56px', color: '#ffec27', stroke: '#000', strokeThickness: 10 }).setOrigin(0.5));
-    const img = this.add.image(W / 2, 300, `char${winner.id}`).setScale(9);
+    const img = addCharacter(this, W / 2, 300, winner.id, 180);
     layer.add(img);
     this.tweens.add({ targets: img, y: 280, duration: 300, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3] });
     layer.add(this.add.text(W / 2, 430, `${winner.name} 高票當選！`, { fontFamily: FONT, fontSize: '48px', color: winner.color, stroke: '#000', strokeThickness: 10 }).setOrigin(0.5));

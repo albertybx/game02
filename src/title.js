@@ -12,6 +12,7 @@ class TitleScene extends Phaser.Scene {
   preload() {
     // AI 畫的建築圖（登記在 data.js 的 BUILDING_IMAGES）
     for (const [key, path] of Object.entries(BUILDING_IMAGES)) this.load.image(`bld_${key}`, path);
+    CHARACTERS.forEach((ch, i) => { if (ch.image) this.load.image(`charimg${i}`, ch.image); });
     this.load.on('loaderror', (file) => console.warn('圖片載入失敗：', file.src));
   }
 
@@ -30,7 +31,7 @@ class TitleScene extends Phaser.Scene {
     // 角色展示
     CHARACTERS.forEach((ch, i) => {
       const x = 120 + i * 160;
-      const img = this.add.image(x, 450, `char${i}`).setScale(5);
+      const img = addCharacter(this, x, 450, i, 110);
       this.tweens.add({ targets: img, y: 440, duration: 400 + i * 60, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3] });
       this.add.text(x, 520, ch.name, { fontFamily: FONT, fontSize: '24px', color: ch.color, stroke: '#000', strokeThickness: 6 }).setOrigin(0.5);
     });
@@ -67,7 +68,7 @@ class TitleScene extends Phaser.Scene {
     // 背景小小的台北天際線
     const icons = ['longshan', 'station', 'presidential', 'taipei101', 'grandhotel', 'arena', 'cks'];
     icons.forEach((k, i) => {
-      this.add.image(60 + i * 100, H - 20, k).setOrigin(0.5, 1).setScale(k === 'taipei101' ? 8 : 5).setAlpha(0.25);
+      addIcon(this, 60 + i * 100, H - 10, k, k === 'taipei101' ? 220 : 60).setOrigin(0.5, 1).setAlpha(0.35);
     });
     // 星星
     for (let i = 0; i < 40; i++) {
