@@ -34,6 +34,7 @@ class GameScene extends Phaser.Scene {
     this.quizOn = !!data.quiz;
     this.quizLevel = data.quizLevel || 'junior';
     applyTileOptions({ quiz: this.quizOn });
+    try { const d = Number(localStorage.getItem('tm_dice')); if (d === 1 || d === 2) GAME_RULES.dice = d; } catch (e) { /* 沒有就用預設 */ }
     QuizDeck.reset();
     this.round = 1;
     this.current = 0;
@@ -369,6 +370,7 @@ class GameScene extends Phaser.Scene {
 
   drawLots() {
     this.lotOverlays = [];
+    this.lotRings = [];
     this.lotBuildings = [];
     const g = this.keepStatic(this.add.graphics().setDepth(-700));
     TILES.forEach((t, i) => {
@@ -399,6 +401,7 @@ class GameScene extends Phaser.Scene {
 
       // 地主標記放這層（之後重畫）
       this.lotOverlays[i] = this.add.container(x, y).setDepth(y + 25);
+      this.lotRings[i] = this.add.container(x, y).setDepth(-600); // 地主的顏色框（在建築下面）
 
       // 點建築看資訊（拖曳地圖時不算）
       hit.setInteractive();
@@ -475,6 +478,8 @@ class GameScene extends Phaser.Scene {
     const ov = this.lotOverlays[i];
     if (!ov) return;
     ov.removeAll(true);
+    const ring = this.lotRings[i];
+    if (ring) ring.removeAll(true);
     const st = this.tileState[i];
     // 路上的小色塊
     const mk = this.roadMarkers && this.roadMarkers[i];
@@ -502,8 +507,9 @@ class GameScene extends Phaser.Scene {
     }
     const color = hex(this.players[st.owner].color);
     const g = this.add.graphics();
+    this.diamond(g, 0, 0, ISO_W - 8, ISO_H - 4, color, 0.28);
     this.diamondLine(g, 0, 0, ISO_W - 8, ISO_H - 4, 6, color);
-    ov.add(g);
+    (ring || ov).add(g);
     // 地主的競選旗（每蓋一層多一支）
     const makeFlag = (fx, fy, h) => {
       if (this.textures.exists('bld_flag')) return addIcon(this, fx, fy, 'flag', h).setOrigin(0.5, 1).setTint(color);
@@ -519,7 +525,7 @@ class GameScene extends Phaser.Scene {
       const n = TILES.filter((x) => x.district === t.district).length;
       const cell = this.lotCell(i);
       const { x, y } = this.iso(cell.col, cell.row);
-      const c = this.add.container(x - 46, y - 18).setDepth(y + 24);
+      const c = this.add.container(x - 46, y - 18).setDepth(-550).setAlpha(0.9);
       const txt = this.add.text(0, -30, `${t.district}${n > 1 ? ` ${n}格` : ''}`, {
         fontFamily: FONT, fontSize: '17px', color: '#ffffff', backgroundColor: '#1d2b53', padding: { x: 5, y: 2 },
       }).setOrigin(0.5, 1);
@@ -716,6 +722,7 @@ class GameScene extends Phaser.Scene {
     this.bounceToken(p);
     this.hud.showTile(p.pos, p);
 
+    p.builtThisTurn = false;
     // 出任務的戰將回來
     await this.generals.onTurnStart(p);
 
@@ -965,7 +972,7 @@ class GameScene extends Phaser.Scene {
     if (p.rallies < R.rallyMax && p.money >= R.rallyCost) {
       acts.push({ key: 'rally', label: `造勢晚會：花 $${R.rallyCost}，支持者 +${R.rallyFans}`, note: `每場 ${R.rallyMax} 次，還剩 ${R.rallyMax - p.rallies} 次` });
     }
-    if (this.buildable(p).length) acts.push({ key: 'build', label: '蓋房子', note: '空地 → 工地 → 小建築 → 地標（每回合一次）' });
+    if (!p.builtThisTurn && this.buildable(p).length) acts.push({ key: 'build', label: '蓋房子', note: '空地 → 工地 → 小建築 → 地標（每回合一次）' });
     if (this.generals.canRemote(p)) acts.push({ key: 'remote', label: '遠端派戰將出任務', note: `不用走到里長格，效果 ×${GENERAL_RULES.remoteRate}` });
     const leader = this.generals.debateTarget(p);
     if (leader) acts.push({ key: 'debate', label: `向 ${leader.name} 發起辯論挑戰`, note: `花 $${R.debateCost}，贏了 +${R.debateFans}、輸了 -${R.debateLoseFans} 位支持者，每場一次` });
@@ -1307,6 +1314,7 @@ class GameScene extends Phaser.Scene {
     });
     if (v === 'skip') return;
     const i = Number(v);
+    p.builtThisTurn = true;
     await this.build(p, i);
   }
 
