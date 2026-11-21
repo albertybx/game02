@@ -89,7 +89,19 @@ class GameScene extends Phaser.Scene {
     // 啟動上層的 HUD，等它準備好再開始遊戲
     this.scene.launch('hud', { game: this });
     this.hud = this.scene.get('hud');
-    this.hud.events.once('create', () => this.runGame());
+    this.hud.events.once('create', () => {
+      // 機會／命運、戰將的成果：訊息跳出畫面中央的事件框
+      const boxed = (obj, fn) => {
+        const orig = obj[fn].bind(obj);
+        obj[fn] = async (...a) => { this.hud.boxOn++; try { return await orig(...a); } finally { this.hud.boxOn--; } };
+      };
+      boxed(this, 'applyCard');
+      ['finishMission', 'finishWoo', 'stakeBattle', 'debate', 'scandal', 'loyaltyAll', 'onRecruit'].forEach((fn) => boxed(this.generals, fn));
+      // 卡片叫你移動後，走到的格子是一般訊息
+      const rt = this.resolveTile.bind(this);
+      this.resolveTile = async (...a) => { const s = this.hud.boxOn; this.hud.boxOn = 0; try { return await rt(...a); } finally { this.hud.boxOn = s; } };
+      this.runGame();
+    });
   }
 
   // ---------- 地圖形狀 ----------
@@ -722,7 +734,6 @@ class GameScene extends Phaser.Scene {
     this.bounceToken(p);
     this.hud.showTile(p.pos, p);
 
-    p.builtThisTurn = false;
     // 出任務的戰將回來
     await this.generals.onTurnStart(p);
 
@@ -972,7 +983,6 @@ class GameScene extends Phaser.Scene {
     if (p.rallies < R.rallyMax && p.money >= R.rallyCost) {
       acts.push({ key: 'rally', label: `造勢晚會：花 $${R.rallyCost}，支持者 +${R.rallyFans}`, note: `每場 ${R.rallyMax} 次，還剩 ${R.rallyMax - p.rallies} 次` });
     }
-    if (!p.builtThisTurn && this.buildable(p).length) acts.push({ key: 'build', label: '蓋房子', note: '空地 → 工地 → 小建築 → 地標（每回合一次）' });
     if (this.generals.canRemote(p)) acts.push({ key: 'remote', label: '遠端派戰將出任務', note: `不用走到里長格，效果 ×${GENERAL_RULES.remoteRate}` });
     const leader = this.generals.debateTarget(p);
     if (leader) acts.push({ key: 'debate', label: `向 ${leader.name} 發起辯論挑戰`, note: `花 $${R.debateCost}，贏了 +${R.debateFans}、輸了 -${R.debateLoseFans} 位支持者，每場一次` });
@@ -984,7 +994,6 @@ class GameScene extends Phaser.Scene {
     const R = GAME_RULES;
     if (this.generals.cpuWantsDebate(p)) return 'debate';
     if (this.generals.cpuWoo(p)) return 'woo';
-    if (this.buildable(p).some((i) => p.money - this.upgradeCost(i) >= 450)) return 'build';
     if (p.rallies < R.rallyMax && p.money >= 700 && this.round > R.maxRounds / 2) return 'rally';
     if (this.generals.cpuWantsRemote(p)) return 'remote';
     return null;
@@ -1025,7 +1034,6 @@ class GameScene extends Phaser.Scene {
       else if (pick === 'remote') await this.generals.remoteMission(p);
       else if (pick === 'debate') await this.generals.debate(p);
       else if (pick === 'woo') await this.generals.woo(p);
-      else if (pick === 'build') await this.buildAction(p);
       if (p.bankrupt) return;
     }
   }
@@ -1265,10 +1273,10 @@ class GameScene extends Phaser.Scene {
     if (ans) await this.build(p, i);
   }
 
-  async build(p, i) {
+  async build(p, i, free = false) {
     const t = TILES[i];
     const st = this.tileState[i];
-    p.money -= this.upgradeCost(i);
+    if (!free) p.money -= this.upgradeCost(i);
     st.level++;
     if (st.level === 3) st.landmark = this.pickLandmark(i);
     this.refreshTile(i);
@@ -1291,31 +1299,26 @@ class GameScene extends Phaser.Scene {
     this.hud.refreshPanels();
   }
 
-  // 可以蓋的空地（擲骰子前的「行動」用）
-  buildable(p) {
-    return TILES.map((t, i) => i).filter((i) => TILES[i].type === 'property' && this.tileState[i].owner === p.id
-      && this.tileState[i].level < GAME_RULES.maxLevel && p.money >= this.upgradeCost(i));
-  }
-
-  async buildAction(p) {
-    const list = this.buildable(p);
-    if (!list.length) return;
+  // 機會卡「都更計畫」：免費幫自己的一塊空地加蓋一個階段
+  async freeBuild(p) {
+    const list = TILES.map((t, i) => i).filter((i) => TILES[i].type === 'property' && this.tileState[i].owner === p.id && this.tileState[i].level < GAME_RULES.maxLevel);
+    if (!list.length) {
+      this.hud.say(`${p.name} 還沒有可以蓋的空地，\n改領補助 $100`);
+      this.changeMoney(p, 100);
+      await this.wait(1100);
+      return;
+    }
     let auto;
     if (!p.human) {
       // 電腦：先蓋快完工的、比較貴的
-      const best = [...list].sort((a, b) => (this.tileState[b].level - this.tileState[a].level) || (TILES[b].price - TILES[a].price))[0];
-      auto = String(best);
+      auto = String([...list].sort((a, b) => (this.tileState[b].level - this.tileState[a].level) || (TILES[b].price - TILES[a].price))[0]);
     }
     const v = await gvModal({
-      title: '蓋房子', color: '#00e436', who: p, autoValue: auto,
-      body: `<p class="gv-tip">每回合可以在擲骰子前蓋一次：空地 → 工地 → 小建築 → <b>地標</b>（完工時隨機抽這一區的地標，有特殊效果）。你有 $${p.money}。</p>
-        <div class="gv-actions">${list.map((i) => `<button type="button" data-v="${i}">${escapeHTML(this.tileName(i))} → ${BUILD_STAGES[this.tileState[i].level + 1]}<small>$${this.upgradeCost(i)}・過路費 $${this.rentOf(i)} → 更高</small></button>`).join('')}</div>
-        <button type="button" class="gv-skip" data-v="skip">先不要</button>`,
+      title: '都更計畫：免費蓋房子', color: '#00e436', who: p, autoValue: auto,
+      body: `<p class="gv-tip">選一塊自己的空地，<b>免費</b>往上蓋一個階段：空地 → 工地 → 小建築 → <b>地標</b>（完工時隨機抽這一區的地標，有特殊效果）。</p>
+        <div class="gv-actions">${list.map((i) => `<button type="button" data-v="${i}">${escapeHTML(this.tileName(i))} → ${BUILD_STAGES[this.tileState[i].level + 1]}<small>${TILES[i].district}・平常要 $${this.upgradeCost(i)}</small></button>`).join('')}</div>`,
     });
-    if (v === 'skip') return;
-    const i = Number(v);
-    p.builtThisTurn = true;
-    await this.build(p, i);
+    await this.build(p, Number(v), true);
   }
 
   async payRent(p, i) {
@@ -1370,6 +1373,7 @@ class GameScene extends Phaser.Scene {
   async applyCard(p, card) {
     if (card.scandal) await this.generals.scandal(p);
     if (card.loyaltyAll) await this.generals.loyaltyAll(p, card.loyaltyAll);
+    if (card.freeBuild) await this.freeBuild(p);
     if (card.fans) {
       this.changeFans(p, card.fans);
       await this.wait(500);

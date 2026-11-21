@@ -389,6 +389,9 @@ const CHANCE_CARDS = [
   { text: '舉辦親子園遊會，花 $100，\n支持者 +250', money: -100, fans: 250 },
   { text: '辯論會大獲全勝！\n每位對手有 100 位支持者倒戈', fansFromEach: 100 },
   { text: '戰將們士氣大振！\n你所有戰將的忠誠度 +15', loyaltyAll: 15 },
+  { text: '都更計畫通過！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
+  { text: '社區營造補助下來了！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
+  { text: '建商搶著合作！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
 ];
 
 const FATE_CARDS = [

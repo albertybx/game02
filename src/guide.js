@@ -57,7 +57,6 @@ function guideHTML() {
     <section>
       <h3>擲骰子前的「行動」</h3>
       <ul>
-        <li><b>蓋房子</b>：把自己的一塊空地往上蓋一個階段。</li>
         <li><b>造勢晚會</b>：花 $${R.rallyCost}，支持者 + ${R.rallyFans}。每場最多 ${R.rallyMax} 次。</li>
         <li><b>遠端派戰將出任務</b>：不用走到里長格也能派，但效果 ×${GR.remoteRate}。</li>
         <li><b>派戰將去拉攏里長</b>：還沒人拉攏的里長，派戰將去拉攏。拜訪過一次的只付一半、${GR.wooTurns} 回合；沒拜訪過的付全額、${GR.wooTurns + 1} 回合。</li>
@@ -81,7 +80,7 @@ function guideHTML() {
         <p>每一區有 3 塊空地。買下後可以<b>慢慢蓋</b>：空地 → 工地 → 小建築 → <b>地標</b>。</p>
         <ul>
           <li>買下：支持者 + 價錢的 ${pct(R.buyFansRate)}。</li>
-          <li>蓋下一階段：花價錢的一半，支持者 + 價錢的 ${pct(R.buildFansRate)}。可以走到自己的空地時蓋，也可以在擲骰子前按「行動 → 蓋房子」（每回合一次）。</li>
+          <li>蓋下一階段：走到自己的空地時，花價錢的一半蓋，支持者 + 價錢的 ${pct(R.buildFansRate)}。抽到機會卡「都更計畫」等，可以<b>免費</b>蓋一次。</li>
           <li>蓋到第 3 階段就完工，<b>隨機</b>變成這一區的地標（例如信義區：台北101、國父紀念館、台北市政府），每個地標有<b>特殊效果</b>（見下面）。</li>
           <li>每回合：帶來 價錢 × ${pct(R.landmarkFansRate)} ×（階段 + 1）位支持者，要付租金 價錢 × ${pct(R.landmarkUpkeepRate)} ×（階段 + 1）。</li>
           <li>對手踩到：付過路費（價錢的 10% × ${R.rentMultiplier.join(' / ')} 倍），而且有 價錢 × ${pct(R.landmarkStealRate)} ×（階段 + 1）位支持者<b>倒戈</b>到你這邊。</li>
