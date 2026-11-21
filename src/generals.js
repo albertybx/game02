@@ -837,9 +837,9 @@ class GeneralSystem {
     const free = this.free();
     gvModal({
       title: '各陣營戰將', color: '#ffa300',
-      body: `${gs.players.map(team).join('')}
-        <h4>還沒加入任何陣營（${free.length} 位）</h4><p class="gv-sub">${free.map((g) => `${escapeHTML(g.name)}（${escapeHTML(g.title)}）`).join('、') || '沒有'}</p>
-        <button type="button" class="gv-skip" data-v="close">關閉</button>`,
+      body: `<button type="button" class="gv-skip gv-close-top" data-v="close">關閉</button>
+        ${gs.players.map(team).join('')}
+        <h4>還沒加入任何陣營（${free.length} 位）</h4><p class="gv-sub">${free.map((g) => `${escapeHTML(g.name)}（${escapeHTML(g.title)}）`).join('、') || '沒有'}</p>`,
     });
   }
 }
