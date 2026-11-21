@@ -21,6 +21,7 @@ class HudScene extends Phaser.Scene {
     this.drawBottom();
     this.choiceLayer = this.add.container(0, 0).setDepth(20);
     this.cardLayer = this.add.container(0, 0).setDepth(50);
+    this.drawEventBox();
     this.scene.bringToTop();
   }
 
@@ -93,6 +94,7 @@ class HudScene extends Phaser.Scene {
     makeButton(this, zx, top + 146, 60, 54, '－', { fill: 0xfff1e8, fontSize: '32px', onClick: () => this.gs.setZoom(this.gs.cameras.main.zoom / 1.2) });
     makeMusicButton(this, zx, top + 210);
     makeButton(this, zx, top + 274, 60, 54, '戰將', { fill: 0xffa300, fontSize: '20px', onClick: () => this.gs.generals.showRoster() });
+    makeButton(this, zx, top + 338, 60, 54, '紀錄', { fill: 0x29adff, fontSize: '20px', onClick: () => this.showLog() });
 
     this.drawPoll(top + 44);
     this.drawTilePlate(top);
@@ -127,6 +129,115 @@ class HudScene extends Phaser.Scene {
     this.roundChip.setText(`第 ${Math.min(gs.round, GAME_RULES.maxRounds)} / ${GAME_RULES.maxRounds} 回合${mult > 1 ? `・選前衝刺 支持者 ×${mult}` : ''}`);
     this.roundChip.setBackgroundColor(mult > 1 ? '#7e2553' : '#1d2b53');
     this.refreshPoll();
+    this.trackChanges();
+  }
+
+  // ---------- 畫面中央的事件框：每個事件、錢和支持者的變化都顯示在這裡 ----------
+  drawEventBox() {
+    this.evLog = [];      // 「紀錄」按鈕看的歷史
+    this.changeLog = [];  // 錢、支持者的每一筆變化
+    this.lastVals = this.gs.players.map((p) => ({ money: p.money, fans: p.fans }));
+    // 右邊有一排按鈕，框框放在按鈕左邊的正中間
+    this.evBox = this.add.container(MAP_VIEW.x + (MAP_VIEW.w - 84) / 2, 0).setDepth(15).setVisible(false);
+  }
+
+  // 每次畫面更新時，比對大家的錢和支持者，記下變化
+  trackChanges() {
+    if (!this.lastVals) return;
+    let changed = false;
+    this.gs.players.forEach((p, i) => {
+      const v = this.lastVals[i];
+      if (v.money !== p.money || v.fans !== p.fans) {
+        this.changeLog.push({ t: Date.now(), pid: i, money: p.money - v.money, fans: p.fans - v.fans });
+        v.money = p.money;
+        v.fans = p.fans;
+        changed = true;
+      }
+    });
+    if (this.changeLog.length > 400) this.changeLog.splice(0, 200);
+    if (changed && this.evBox.visible) this.renderEventBox();
+  }
+
+  showEvent(text) {
+    const gs = this.gs;
+    const p = gs.players[gs.current];
+    this.trackChanges();
+    // 事件出現前一下下的變化也算進來（有些地方是先扣錢再顯示訊息）
+    this.evStart = Date.now() - 350;
+    this.evEntry = { round: Math.min(gs.round, GAME_RULES.maxRounds), who: p ? p.name : '', color: p ? p.color : '#ffec27', text, changes: '' };
+    this.evLog.unshift(this.evEntry);
+    if (this.evLog.length > 80) this.evLog.pop();
+    this.renderEventBox(true);
+  }
+
+  renderEventBox(pop = false) {
+    const box = this.evBox;
+    const gs = this.gs;
+    box.removeAll(true);
+    const w = LANDSCAPE ? 600 : MAP_VIEW.w - 110;
+    // 這個事件期間，每個人的變化加總
+    const agg = new Map();
+    for (const c of this.changeLog) {
+      if (c.t < this.evStart) continue;
+      const a = agg.get(c.pid) || { money: 0, fans: 0 };
+      a.money += c.money;
+      a.fans += c.fans;
+      agg.set(c.pid, a);
+    }
+    const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
+    const chips = [...agg.entries()].filter(([, a]) => a.money || a.fans).map(([pid, a]) => {
+      const pl = gs.players[pid];
+      const parts = [];
+      if (a.money) parts.push(`$${sign(a.money)}`);
+      if (a.fans) parts.push(`支持 ${sign(a.fans)}`);
+      return { pl, label: `${pl.name} ${parts.join('  ')}` };
+    });
+    this.evEntry.changes = chips.map((c) => c.label).join('、');
+
+    const txt = this.add.text(0, 18, this.evEntry.text, {
+      fontFamily: FONT, fontSize: '30px', color: '#fff1e8', align: 'center', lineSpacing: 6,
+      wordWrap: { width: w - 36, useAdvancedWrap: true },
+    }).setOrigin(0.5, 0);
+    let h = 18 + txt.height + 14;
+    const chipObjs = [];
+    const cw = w - 36;
+    chips.forEach((c, k) => {
+      const cx = 0;
+      const cy = h + k * 46 + 20;
+      chipObjs.push(this.add.rectangle(cx, cy, cw, 40, hex(c.pl.color)).setStrokeStyle(3, 0x000000));
+      chipObjs.push(this.add.text(cx, cy, c.label, { fontFamily: FONT, fontSize: '23px', color: '#000000' }).setOrigin(0.5));
+    });
+    if (chips.length) h += chips.length * 46 + 6;
+    h += 6;
+    const color = hex(this.evEntry.color);
+    box.add(this.add.rectangle(6, h / 2 + 6, w, h, 0x000000, 0.5));
+    box.add(this.add.rectangle(0, h / 2, w, h, 0x1d2b53, 0.94).setStrokeStyle(5, color));
+    box.add(this.add.rectangle(0, 4, w, 8, color).setOrigin(0.5, 0));
+    box.add(txt);
+    chipObjs.forEach((o) => box.add(o));
+    // 直版：民調表下面；橫版：地圖下方（上面有格子名稱牌）
+    box.y = LANDSCAPE ? MAP_VIEW.y + MAP_VIEW.h - h - 14 : MAP_VIEW.y + 236;
+    box.setVisible(true);
+    if (pop) {
+      box.setScale(0.85).setAlpha(0.4);
+      this.tweens.add({ targets: box, scale: 1, alpha: 1, duration: 160, ease: 'Back.easeOut' });
+    }
+  }
+
+  hideEvent() { if (this.evBox) this.evBox.setVisible(false); }
+
+  showLog() {
+    if (document.querySelector('.gv-modal')) return;
+    const rows = this.evLog.map((e) => `
+      <div class="lg-row" style="border-left:8px solid ${e.color}">
+        <p class="lg-head">第 ${e.round} 回合・${escapeHTML(e.who)}</p>
+        <p>${escapeHTML(e.text).replace(/\n/g, '<br>')}</p>
+        ${e.changes ? `<p class="lg-ch">${escapeHTML(e.changes)}</p>` : ''}
+      </div>`).join('');
+    gvModal({
+      title: '事件紀錄', color: '#29adff',
+      body: `<p class="gv-tip">最新的在最上面（最多 80 筆）。</p>${rows || '<p class="gv-sub">還沒有事件</p>'}<button type="button" class="gv-skip" data-v="close">關閉</button>`,
+    });
   }
 
   // ---------- 即時民調：長條圖 / 圓餅圖（右上角按鈕切換，會記住選擇）----------
@@ -291,9 +402,21 @@ class HudScene extends Phaser.Scene {
     this.add.rectangle(x0, y0, W - x0, 4, 0x000000).setOrigin(0);
 
     const diceX = x0 + 84;
-    this.add.rectangle(diceX, midY, 120, 104, 0x29366f).setStrokeStyle(4, 0x000000);
-    // 兩顆骰子
-    this.dice = [this.add.image(diceX - 26, midY - 4, 'dice1').setScale(3.4), this.add.image(diceX + 26, midY - 4, 'dice1').setScale(3.4)];
+    const diceBox = this.add.rectangle(diceX, midY, 120, 104, 0x29366f).setStrokeStyle(4, 0x000000);
+    this.diceX = diceX;
+    this.diceY = midY - 8;
+    this.dice = [this.add.image(diceX - 26, midY - 8, 'dice1').setScale(3.4), this.add.image(diceX + 26, midY - 8, 'dice1').setScale(3.4)];
+    this.diceLabel = this.add.text(diceX, midY + 38, '', { fontFamily: FONT, fontSize: '16px', color: '#fff1e8' }).setOrigin(0.5);
+    // 點骰子：切換擲 1 顆或 2 顆（會記住）
+    diceBox.setInteractive({ useHandCursor: true });
+    diceBox.on('pointerup', () => {
+      if (this.rolling) return;
+      GAME_RULES.dice = GAME_RULES.dice === 1 ? 2 : 1;
+      try { localStorage.setItem('tm_dice', String(GAME_RULES.dice)); } catch (e) { /* 不能存就算了 */ }
+      Sfx.click();
+      this.layoutDice();
+    });
+    this.layoutDice();
 
     const mx = x0 + 158;
     const mw = W - mx - 14;
@@ -307,9 +430,18 @@ class HudScene extends Phaser.Scene {
 
   say(text) {
     this.msgText.setText(text);
+    this.showEvent(text);
+  }
+
+  layoutDice() {
+    const two = GAME_RULES.dice === 2;
+    this.dice[0].setX(two ? this.diceX - 26 : this.diceX);
+    this.dice[1].setVisible(two);
+    this.diceLabel.setText(`${GAME_RULES.dice} 顆・點我換`);
   }
 
   async rollDice() {
+    this.rolling = true;
     const prog = { v: 0 };
     let lastFace = -1;
     await new Promise((res) => this.tweens.add({
@@ -327,6 +459,7 @@ class HudScene extends Phaser.Scene {
     this.dice.forEach((d, k) => d.setTexture(`dice${faces[k]}`).setAngle(0).setVisible(k < GAME_RULES.dice));
     Sfx.beep(880, 0.08);
     await new Promise((res) => this.tweens.add({ targets: this.dice, scale: 4.2, duration: 100, yoyo: true, onComplete: res }));
+    this.rolling = false;
     return faces.slice(0, GAME_RULES.dice).reduce((a, b) => a + b, 0);
   }
 
@@ -375,6 +508,7 @@ class HudScene extends Phaser.Scene {
   // ---------- 結算 ----------
   showResults() {
     const gs = this.gs;
+    this.hideEvent();
     this.refreshPanels();
     this.choiceLayer.removeAll(true);
     // 排名：先比支持者，一樣多再比總資產；破產的排最後
