@@ -589,16 +589,20 @@ class GameScene extends Phaser.Scene {
       if (g.stationedAt === null) continue;
       const cell = this.lotCell(g.stationedAt);
       const { x, y } = this.iso(cell.col, cell.row);
-      const c = this.add.container(x + 30, y + 22).setDepth(y + 40);
-      const ring = this.add.graphics();
-      this.diamond(ring, 0, 0, 44, 22, hex(this.players[g.owner].color));
-      this.diamondLine(ring, 0, 0, 44, 22, 2, 0x000000);
-      c.add(ring);
+      // 駐守徽章：玩家顏色的小框＋戰將大頭照＋「駐守」字樣（不是玩家角色）
+      const c = this.add.container(x + 40, y - 18).setDepth(y + 40);
+      c.add(this.add.rectangle(0, 0, 46, 46, hex(this.players[g.owner].color)).setStrokeStyle(3, 0x000000));
       if (this.textures.exists(`genimg${g.id}`)) {
-        const im = this.add.image(0, 4, `genimg${g.id}`).setOrigin(0.5, 1);
-        im.setScale(52 / im.width);
+        const im = this.add.image(0, 0, `genimg${g.id}`).setOrigin(0, 0);
+        const side = Math.round(im.width * 0.8);
+        const cx = Math.round(im.width * 0.1);
+        const s = 38 / side;
+        im.setCrop(cx, 0, side, side).setScale(s).setPosition(-19 - cx * s, -19);
         c.add(im);
       }
+      c.add(this.add.text(0, 25, '駐守', {
+        fontFamily: FONT, fontSize: '15px', color: '#ffffff', backgroundColor: '#000000', padding: { x: 4, y: 1 },
+      }).setOrigin(0.5, 0));
       this.stationIcons.push(c);
     }
   }
@@ -617,6 +621,12 @@ class GameScene extends Phaser.Scene {
     cam.setZoom(ZOOM.start);
     this.dragging = false;
     this.input.addPointer(1); // 允許兩指（縮放用）
+    // 用瀏覽器自己的觸控數量確認是不是真的兩指
+    this.touches = 0;
+    const countTouches = (e) => { this.touches = e.touches ? e.touches.length : 0; };
+    const evs = ['touchstart', 'touchend', 'touchcancel'];
+    evs.forEach((ev) => window.addEventListener(ev, countTouches, { passive: true }));
+    this.events.once('shutdown', () => evs.forEach((ev) => window.removeEventListener(ev, countTouches)));
     this.input.on('pointerdown', (p) => {
       this.dragStart = { x: p.x, y: p.y, sx: cam.scrollX, sy: cam.scrollY };
       this.dragging = false;
@@ -625,7 +635,7 @@ class GameScene extends Phaser.Scene {
       // 兩指縮放
       const p1 = this.input.pointer1;
       const p2 = this.input.pointer2;
-      if (p1.isDown && p2.isDown) {
+      if (p1.isDown && p2.isDown && this.touches >= 2) {
         const d = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
         if (!this.pinch) this.pinch = { d, zoom: cam.zoom };
         else this.setZoom(this.pinch.zoom * d / this.pinch.d);
@@ -1155,7 +1165,12 @@ class GameScene extends Phaser.Scene {
     if (p.rallies < R.rallyMax && p.money >= R.rallyCost) {
       acts.push({ key: 'rally', label: `造勢晚會：花 $${R.rallyCost}，支持者 +${R.rallyFans}`, note: `每場 ${R.rallyMax} 次，還剩 ${R.rallyMax - p.rallies} 次` });
     }
-    if (this.generals.canRemote(p)) acts.push({ key: 'remote', label: '遠端派戰將出任務', note: `不用走到里長格，效果 ×${GENERAL_RULES.remoteRate}` });
+    if (this.generals.canRemote(p)) {
+      const here = this.generals.ownChiefs(p).includes(p.pos);
+      acts.push(here
+        ? { key: 'remote', label: '派戰將出任務', note: `你站在自己的${TILES[p.pos].district}里長格：派到這裡效果全額，派到別區 ×${GENERAL_RULES.remoteRate}` }
+        : { key: 'remote', label: '遠端派戰將出任務', note: `不用走到里長格，效果 ×${GENERAL_RULES.remoteRate}` });
+    }
     const leader = this.generals.debateTarget(p);
     if (leader) acts.push({ key: 'debate', label: `向 ${leader.name} 發起辯論挑戰`, note: `花 $${R.debateCost}，贏了 +${R.debateFans}、輸了 -${R.debateLoseFans} 位支持者，每場一次` });
     if (this.generals.wooTargets(p).length) acts.push({ key: 'woo', label: '派戰將去拉攏里長', note: `不用走到里長格，派戰將去拉攏（${GENERAL_RULES.wooTurns}～${GENERAL_RULES.wooTurns + 1} 回合）` });
@@ -1495,8 +1510,13 @@ class GameScene extends Phaser.Scene {
     const st = this.tileState[i];
     if (st.level >= GAME_RULES.maxLevel) {
       const l = this.landmarkOf(i);
-      this.hud.say(`${l ? l.name : t.name} 已經完工了！\n過路費 $${this.rentOf(i)}`);
-      await this.wait(1100);
+      const fans = Math.round(t.price * GAME_RULES.ownLandmarkFansRate);
+      this.hud.boxOn++;
+      try {
+        this.hud.say(`${p.name} 回到自己的${l ? l.name : t.name}，\n舉辦市民活動！支持者 +${fans}`);
+        this.changeFans(p, fans);
+        await this.wait(1300);
+      } finally { this.hud.boxOn--; }
       return;
     }
     const cost = this.upgradeCost(i);

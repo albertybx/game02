@@ -251,6 +251,7 @@ class GeneralSystem {
     if (m.money) {
       if (remote && !hasSkill(g, SK.remoteFull)) mult *= R.remoteRate;
       const turns = Math.max(1, m.turns - (hasSkill(g, SK.fastMission) ? 1 : 0));
+      mult *= turns / m.turns; // 小傑提早回來：收穫照比例
       if (m.key === 'tender') {
         const v = Math.round(R.tenderMoney * mult);
         return { mult, min: v, max: v, roll: () => v, turns, cost: R.tenderCost, money: true };
@@ -264,17 +265,19 @@ class GeneralSystem {
       };
     }
     if (m.key === 'media') mult *= R.mediaBonus;
-    if (m.key === 'wedding' && hasSkill(g, SK.weddingX2)) mult *= 2;
-    if (m.key === 'service' && hasSkill(g, SK.serviceX2)) mult *= 2;
+    if (m.key === 'wedding' && hasSkill(g, SK.weddingX2)) mult *= R.skillMissionRate;
+    if (m.key === 'service' && hasSkill(g, SK.serviceX2)) mult *= R.skillMissionRate;
     if (remote && !hasSkill(g, SK.remoteFull)) mult *= R.remoteRate;
     if (g.owner !== null && this.gs.hasEffectIn(g.owner, TILES[i].district, 'culture')) mult *= 1.5;
-    const base = R.missionBase + s * R.missionPerStat;
+    const turns = Math.max(1, m.turns - (hasSkill(g, SK.fastMission) ? 1 : 0));
+    mult *= turns / m.turns; // 小傑提早回來：收穫照比例
+    const base = (m.base ?? R.missionBase) + s * (m.perStat ?? R.missionPerStat);
     return {
       mult,
       min: Math.round((base + 10) * mult),
       max: Math.round((base + 60) * mult),
       roll: () => Math.round((base + d6() * 10) * mult),
-      turns: Math.max(1, m.turns - (hasSkill(g, SK.fastMission) ? 1 : 0)),
+      turns,
       cost: m.key === 'media' && !hasSkill(g, SK.mediaFree) ? R.mediaCost : 0,
     };
   }
@@ -295,7 +298,7 @@ class GeneralSystem {
   cpuBestMission(p, gens, tiles, remote) {
     let best = null;
     for (const g of gens) for (const i of tiles) for (const m of MISSIONS) {
-      const pl = this.missionPlan(g, m, i, remote);
+      const pl = this.missionPlan(g, m, i, typeof remote === 'function' ? remote(i) : remote);
       if (pl.cost && p.money < pl.cost + (pl.money ? 100 : 400)) continue;
       // 錢的任務：越缺錢越想做
       const need = p.money < 500 ? 1.6 : p.money < 1000 ? 0.8 : 0.3;
@@ -325,8 +328,12 @@ class GeneralSystem {
     const guard = this.stationedAt(i);
     const avail = this.available(p);
     if (!avail.length) {
-      gs.hud.say(`${t.name} 是自己人，\n里民服務做得好，口碑不錯！`);
-      await gs.wait(1000);
+      gs.hud.boxOn++;
+      try {
+        gs.hud.say(`${p.name} 回到自己的${t.district}里長格，\n里民熱情招呼！支持者 +${GAME_RULES.ownChiefFans}${this.ownedBy(p).length ? '\n（戰將都在忙，回來後可以在擲骰子前派任務）' : ''}`);
+        gs.changeFans(p, GAME_RULES.ownChiefFans);
+        await gs.wait(1300);
+      } finally { gs.hud.boxOn--; }
       return;
     }
 
@@ -383,16 +390,21 @@ class GeneralSystem {
     let auto1;
     let auto2;
     if (!p.human) {
-      const b = this.cpuBestMission(p, avail.slice(avail.length >= 2 ? 1 : 0), chiefs, true);
+      const b = this.cpuBestMission(p, avail.slice(avail.length >= 2 ? 1 : 0), chiefs, (i) => i !== p.pos);
       if (!b) return;
       auto1 = `m:${b.m.key}:${b.g.id}`;
       auto2 = String(b.i);
     }
-    const ref = chiefs[0];
+    // 站在自己的里長格：派到這一格效果全額
+    const here = chiefs.includes(p.pos) ? p.pos : null;
+    const ref = here !== null ? here : chiefs[0];
+    const tip = here !== null
+      ? `你站在自己的${escapeHTML(TILES[here].district)}里長格，派到<b>這裡效果全額</b>；派到別區效果 ×${GR().remoteRate}。在戰將的家鄉出任務能力 +1。`
+      : `不用走到里長格也能派任務（包括募款餐會、政府標案），但效果 ×${GR().remoteRate}。在戰將的家鄉出任務能力 +1（下面的數字先用 ${escapeHTML(TILES[ref].district)} 算，下一步再選地點）。`;
     const v = await gvModal({
-      title: '遠端派任務', color: '#00e436', who: p, autoValue: auto1,
-      body: `<p class="gv-tip">不用走到里長格也能派任務（包括募款餐會、政府標案），但效果 ×${GR().remoteRate}。在戰將的家鄉出任務能力 +1（下面的數字先用 ${escapeHTML(TILES[ref].district)} 算，下一步再選地點）。</p>
-        <div class="gv-grid">${avail.map((g) => generalCardHTML(g, `<p class="gv-sub">忠誠度 ${g.loyalty}</p><div class="gv-actions">${this.missionButtons(p, g, ref, true)}</div>`)).join('')}</div>
+      title: here !== null ? '派戰將出任務' : '遠端派任務', color: '#00e436', who: p, autoValue: auto1,
+      body: `<p class="gv-tip">${tip}</p>
+        <div class="gv-grid">${avail.map((g) => generalCardHTML(g, `<p class="gv-sub">忠誠度 ${g.loyalty}</p><div class="gv-actions">${this.missionButtons(p, g, ref, here === null)}</div>`)).join('')}</div>
         <button type="button" class="gv-skip" data-v="skip">先不要</button>`,
     });
     if (v === 'skip') return;
@@ -404,13 +416,13 @@ class GeneralSystem {
       const w = await gvModal({
         title: `${g.name}：去哪一區？`, color: '#00e436', who: p, autoValue: auto2,
         body: `<div class="gv-actions">${chiefs.map((c) => {
-          const pl = this.missionPlan(g, m, c, true);
-          return `<button type="button" data-v="${c}">${escapeHTML(TILES[c].name)}${g.home === TILES[c].district ? '（家鄉 +1）' : ''}<small>支持 +${pl.min}～${pl.max}${m.key === 'service' ? `・穩固度 ${this.stability(c)}` : ''}</small></button>`;
+          const pl = this.missionPlan(g, m, c, c !== p.pos);
+          return `<button type="button" data-v="${c}">${escapeHTML(TILES[c].name)}${c === p.pos ? '（你在這裡，全額）' : ''}${g.home === TILES[c].district ? '（家鄉 +1）' : ''}<small>支持 +${pl.min}～${pl.max}${m.key === 'service' ? `・穩固度 ${this.stability(c)}` : ''}</small></button>`;
         }).join('')}</div>`,
       });
       i = Number(w);
     }
-    await this.dispatch(p, g, m, i, true);
+    await this.dispatch(p, g, m, i, i !== p.pos);
   }
 
   // ---------- 神秘的金援：派戰將去找神秘金主（人脈越高越容易成功） ----------

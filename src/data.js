@@ -60,6 +60,8 @@ const GAME_RULES = {
   darkFans: 350,          //   失敗（被檢調盯上）：支持者 -350
   darkLoyalty: 15,        //   戰將忠誠度 -15
   sellRate: 0.5,          // 主動賣地：半價賣回給銀行
+  ownLandmarkFansRate: 0.25, // 停在自己完工的地標：辦市民活動，支持者 + 價錢 × 0.25
+  ownChiefFans: 40,       // 停在自己的里長格、又沒有戰將可以派：里民熱情招呼，支持者 + 40
 
   // ---- 特殊挑戰：英文學習格（首頁可以選擇要不要加入）----
   quizMoney: 200,        // 答對：錢 + 200（大幅）
@@ -323,11 +325,11 @@ const GENERALS = [
 // 戰將專屬技能（key 對應上面的 id）
 const GENERAL_SKILLS = {
   0:  { name: '網紅帶貨', text: '媒體宣傳不用花錢' },
-  1:  { name: '廟口人情', text: '跑紅白帖的效果 ×2' },
+  1:  { name: '廟口人情', text: '跑紅白帖的效果 ×1.5' },
   2:  { name: '菜市場情報', text: '駐守防守時，三項能力 +1' },
-  3:  { name: '效率至上', text: '出任務少花 1 回合（最少 1 回合）' },
+  3:  { name: '效率至上', text: '出任務提早 1 回合回來（最少 1 回合，收穫照比例）；拉攏里長也快 1 回合' },
   4:  { name: '名嘴開講', text: '拔樁戰出「演講」+1' },
-  5:  { name: '志工動員', text: '選民服務的效果 ×2' },
+  5:  { name: '志工動員', text: '選民服務的效果 ×1.5' },
   6:  { name: '醫德清白', text: '不會鬧醜聞' },
   7:  { name: '國手魅力', text: '拔樁戰出「造勢」+1' },
   8:  { name: '辯論高手', text: '辯論挑戰時，三項能力 +2' },
@@ -338,9 +340,9 @@ const GENERAL_SKILLS = {
 
 // 派任務：用哪項能力、要離開幾回合
 const MISSIONS = [
-  { key: 'wedding', name: '跑紅白帖', stat: 'charisma', turns: 1, note: '不花錢' },
-  { key: 'service', name: '選民服務', stat: 'network', turns: 2, note: '那一格樁腳更穩 +1' },
-  { key: 'media', name: '媒體宣傳', stat: 'eloquence', turns: 3, note: '要花錢，效果 ×1.5' },
+  { key: 'wedding', name: '跑紅白帖', stat: 'charisma', turns: 1, base: 15, perStat: 15, note: '不花錢，很快回來，但收穫比較少' },
+  { key: 'service', name: '選民服務', stat: 'network', turns: 2, base: 70, perStat: 30, note: '那一格樁腳更穩 +1' },
+  { key: 'media', name: '媒體宣傳', stat: 'eloquence', turns: 3, base: 60, perStat: 30, note: '要花錢，效果 ×1.65' },
   // 下面兩個帶回「錢」
   { key: 'dinner', name: '募款餐會', stat: 'charisma', turns: 2, money: true, note: '看魅力，帶回錢' },
   { key: 'tender', name: '政府標案', stat: null, turns: 2, money: true, note: '先付錢，回來時里長還是你的就賺錢' },
@@ -353,17 +355,18 @@ const GENERAL_RULES = {
   startLoyalty: 80,       // 剛加入時的忠誠度
   poachBelow: 60,         // 忠誠度低於多少，就可能被挖角
   poachCost: 400,         // 挖角要付的錢（成功才付）
-  // 任務（在自己的里長格派出）：支持者 + 基本 + 能力 × 倍數 + 骰子 × 10
+  // 任務（在自己的里長格派出）：支持者 + 基本 + 能力 × 倍數 + 骰子 × 10（基本和倍數寫在 MISSIONS，沒寫就用這兩個）
   missionBase: 60,
   missionPerStat: 30,
   mediaCost: 100,         // 媒體宣傳要花的錢（效果比較大）
-  mediaBonus: 1.5,        // 媒體宣傳的效果倍數
-  dinnerCost: 50,         // 募款餐會：場地費
-  dinnerBase: 60,         //   帶回 $60 + 魅力 × 30 + 骰子 × 10
+  mediaBonus: 1.65,       // 媒體宣傳的效果倍數
+  skillMissionRate: 1.5,  // 金水伯的紅白帖、小安的選民服務：效果 ×1.5
+  dinnerCost: 40,         // 募款餐會：場地費
+  dinnerBase: 80,         //   帶回 $80 + 魅力 × 30 + 骰子 × 10
   dinnerPerStat: 30,
-  tenderCost: 80,         // 政府標案：先付 $80
-  tenderMoney: 250,       //   回來時里長還是你的：拿 $250
-  tenderRefund: 40,       //   里長被搶走：只退 $40
+  tenderCost: 100,        // 政府標案：先付 $100
+  tenderMoney: 290,       //   回來時里長還是你的：拿 $290
+  tenderRefund: 75,       //   里長被搶走：只退 $75
   missionRest: 1,         // （舊規則，沒用到）
   remoteRate: 0.7,        // 遠端派任務（不在那一格）：效果 × 0.7
   wooTurns: 2,            // 派戰將去拉攏「拜訪過一次」的里長，要離開幾回合

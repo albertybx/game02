@@ -131,9 +131,9 @@ function guideHTML() {
       <p>戰將有三項能力（1～5）：<b>口才</b>、<b>人脈</b>、<b>魅力</b>，還有出身的行政區（在家鄉做事 +${GR.homeBonus}）。右上角「戰將」按鈕可以看各陣營的戰將。</p>
       <p><b>派任務</b>：戰將會離開隊伍幾回合，回來時帶回支持者。站在自己的里長格派，效果全額；擲骰子前遠端派，效果 ×${GR.remoteRate}。</p>
       <ul>
-        <li>跑紅白帖（${MISSIONS[0].turns} 回合）：看魅力，不花錢。</li>
-        <li>選民服務（${MISSIONS[1].turns} 回合）：看人脈，那一格的樁腳更穩，比較不容易被拔。</li>
-        <li>媒體宣傳（${MISSIONS[2].turns} 回合）：看口才，花 $${GR.mediaCost}，效果 ×${GR.mediaBonus}。</li>
+        <li>跑紅白帖（${MISSIONS[0].turns} 回合）：看魅力，不花錢、很快回來，但收穫比較少（${MISSIONS[0].base} + 魅力 × ${MISSIONS[0].perStat}）。</li>
+        <li>選民服務（${MISSIONS[1].turns} 回合）：看人脈（${MISSIONS[1].base} + 人脈 × ${MISSIONS[1].perStat}），那一格的樁腳更穩，比較不容易被拔。</li>
+        <li>媒體宣傳（${MISSIONS[2].turns} 回合）：看口才（${MISSIONS[2].base} + 口才 × ${MISSIONS[2].perStat}），花 $${GR.mediaCost}，效果 ×${GR.mediaBonus}，一次帶回最多。</li>
         <li><b>募款餐會</b>（${MISSIONS[3].turns} 回合）：看魅力，先付場地費 $${GR.dinnerCost}，帶回 $${GR.dinnerBase} + 魅力 × ${GR.dinnerPerStat} + 骰子 × 10 的錢。</li>
         <li><b>政府標案</b>（${MISSIONS[4].turns} 回合）：先付 $${GR.tenderCost}，回來時里長還是你的就拿 $${GR.tenderMoney}；被搶走只退 $${GR.tenderRefund}。</li>
         <li>駐守：站在自己的里長格時，可以讓戰將留下來防守。駐守後就<b>離開隊伍</b>，不能再派去別的地方；那一格被搶走時才會回來。駐守時要選一個「防守風格」（他最常出的招），對手看得到。</li>
