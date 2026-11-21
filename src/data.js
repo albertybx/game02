@@ -9,18 +9,35 @@ const GAME_RULES = {
   maxLevel: 3,        // 地標的競選總部最多蓋幾層
   rentMultiplier: [1, 4, 10, 20], // 地標 0~3 層時，過路費是基本過路費的幾倍
   towFine: 100,       // 拖吊場罰款
+  startSpread: 2,     // 起點錯開：第 2 位玩家從第 2 格出發、第 3 位第 4 格…（先擲骰的人才不會太有利）
 
   // ---- 地標（賺錢為主，也帶來一些支持者）----
   buyFansRate: 0.5,     // 買下地標：支持者 + 價錢 × 0.5
   buildFansRate: 0.5,   // 蓋一層競選總部：支持者 + 價錢 × 0.5
-  landmarkFansRate: 0.1, // 【A】每回合開始：每個地標帶來 價錢 × 0.1 ×（總部層數 + 1）位支持者
+  landmarkFansRate: 0.15, // 【A】每回合開始：每個地標帶來 價錢 × 0.15 ×（總部層數 + 1）位支持者
   landmarkStealRate: 0.2, // 【B】對手踩到你的地標：倒戈 價錢 × 0.2 ×（總部層數 + 1）位支持者
+  landmarkUpkeepRate: 0.02, // 地標租金：每回合開始付 價錢 × 0.02 ×（總部層數 + 1）
 
   // ---- 里長（便宜、過路費低，但帶來比較多支持者）----
-  chiefBuyFans: 300,    // 買下里長：支持者 + 300
-  chiefFansPerTurn: 60, // 【A】每回合開始：每位里長帶來 60 位支持者
+  chiefBuyFans: 200,    // 拉攏里長：支持者 + 200
+  chiefFansPerTurn: 50, // 【A】每回合開始：每位里長帶來 50 位支持者
   chiefSteal: 80,       // 【B】對手踩到你的里長格：倒戈 80 位支持者
   chiefRentRate: 0.1,   // 里長格過路費：價錢 × 0.1
+  chiefVisits: 2,       // 要拜訪幾次才拉攏得到（每次付 價錢 ÷ 2）
+  chiefFeeEvery: 3,     // 每擁有幾回合，要付一次「地方經營費」
+  chiefFeeRate: 0.4,    // 地方經營費 = 價錢 × 0.4（付不出來，里長就跑掉）
+
+  // ---- 其他 ----
+  districtBonus: 100,   // 整區加成：同一區（2 格以上）的地標和里長全部拿下，每回合再 + 100 位支持者
+  rallyCost: 150,       // 造勢晚會：擲骰子前可以花錢辦
+  rallyFans: 200,       //   換到的支持者
+  rallyMax: 2,          //   每場最多辦幾次
+  finalRounds: 10,      // 選前衝刺：最後 10 回合（10 回合的短局是最後 5 回合），支持者的增減一回合比一回合大
+  finalStep: 0.1,       //   每回合多 10%（最後一回合 ×2）
+  debateGap: 600,       // 辯論挑戰：下半場，落後第一名這麼多支持者時可以發起
+  debateCost: 100,
+  debateFans: 250,      //   發起的人贏了：第一名有這麼多支持者倒戈過來（每人每場一次）
+  debateLoseFans: 100,  //   發起的人輸了：自己有這麼多支持者倒戈給第一名
 
 
   // ---- 特殊挑戰：英文學習格（首頁可以選擇要不要加入）----
@@ -112,15 +129,37 @@ const GENERALS = [
   { id: 5, name: '小安',   title: '志工隊長',   eloquence: 3, network: 3, charisma: 3, home: '文山區', image: 'assets/generals/gen5.png' },
   { id: 6, name: '陳醫師', title: '社區醫師',   eloquence: 3, network: 4, charisma: 2, home: '北投區', image: 'assets/generals/gen6.png' },
   { id: 7, name: '莉莉',   title: '前奧運國手', eloquence: 1, network: 3, charisma: 5, home: '士林區', image: 'assets/generals/gen7.png' },
-  // 以下四位：名字是暫時的，之後可以改
-  { id: 8,  name: '戰將甲', title: '前總統',   eloquence: 5, network: 2, charisma: 2, home: '中正區', image: 'assets/generals/gen8.png' },
-  { id: 9,  name: '戰將乙', title: '前總統',   eloquence: 2, network: 4, charisma: 3, home: '中山區', image: 'assets/generals/gen9.png' },
-  { id: 10, name: '戰將丙', title: '前市長',   eloquence: 3, network: 2, charisma: 4, home: '信義區', image: 'assets/generals/gen10.png' },
-  { id: 11, name: '戰將丁', title: '前總統',   eloquence: 3, network: 4, charisma: 2, home: '南港區', image: 'assets/generals/gen11.png' },
+  { id: 8,  name: '巴巴大俠', title: '前總統',   eloquence: 5, network: 2, charisma: 2, home: '中正區', image: 'assets/generals/gen8.png' },
+  { id: 9,  name: '鷹九',     title: '前總統',   eloquence: 2, network: 4, charisma: 3, home: '中山區', image: 'assets/generals/gen9.png' },
+  { id: 10, name: '木可阿伯', title: '前市長',   eloquence: 3, network: 2, charisma: 4, home: '信義區', image: 'assets/generals/gen10.png' },
+  { id: 11, name: '蔡實實',   title: '前總統',   eloquence: 3, network: 4, charisma: 2, home: '南港區', image: 'assets/generals/gen11.png' },
+];
+
+// 戰將專屬技能（key 對應上面的 id）
+const GENERAL_SKILLS = {
+  0:  { name: '網紅帶貨', text: '媒體宣傳不用花錢' },
+  1:  { name: '廟口人情', text: '跑紅白帖的效果 ×2' },
+  2:  { name: '菜市場情報', text: '駐守防守時，三項能力 +1' },
+  3:  { name: '效率至上', text: '出任務少花 1 回合（最少 1 回合）' },
+  4:  { name: '名嘴開講', text: '拔樁戰出「演講」+1' },
+  5:  { name: '志工動員', text: '選民服務的效果 ×2' },
+  6:  { name: '醫德清白', text: '不會鬧醜聞' },
+  7:  { name: '國手魅力', text: '拔樁戰出「造勢」+1' },
+  8:  { name: '辯論高手', text: '辯論挑戰時，三項能力 +2' },
+  9:  { name: '晨跑達人', text: '遠端派任務也不打折' },
+  10: { name: '直來直往', text: '拔樁戰平手時算他贏' },
+  11: { name: '貓派穩定', text: '忠誠度不會低於 60，挖角挖不走' },
+};
+
+// 派任務：用哪項能力、要離開幾回合
+const MISSIONS = [
+  { key: 'wedding', name: '跑紅白帖', stat: 'charisma', turns: 1, note: '不花錢' },
+  { key: 'service', name: '選民服務', stat: 'network', turns: 2, note: '那一格樁腳更穩 +1' },
+  { key: 'media', name: '媒體宣傳', stat: 'eloquence', turns: 3, note: '要花錢，效果 ×1.5' },
 ];
 
 const GENERAL_RULES = {
-  maxPerPlayer: 2,        // 每人最多幾位戰將
+  maxPerPlayer: Infinity, // 每人最多幾位戰將（沒有上限）
   recruitCost: 300,       // 招募費
   recruitChoices: 2,      // 招募站一次翻幾張
   startLoyalty: 80,       // 剛加入時的忠誠度
@@ -131,7 +170,9 @@ const GENERAL_RULES = {
   missionPerStat: 30,
   mediaCost: 100,         // 媒體宣傳要花的錢（效果比較大）
   mediaBonus: 1.5,        // 媒體宣傳的效果倍數
-  missionRest: 1,         // 出完任務休息幾回合
+  missionRest: 1,         // （舊規則，沒用到）
+  remoteRate: 0.7,        // 遠端派任務（不在那一格）：效果 × 0.7
+  wooTurns: 2,            // 派戰將去拉攏「拜訪過一次」的里長，要離開幾回合
   // 拔樁戰
   counterBonus: 2,        // 出的招剋到對方 +2
   homeBonus: 1,           // 在出身區 +1

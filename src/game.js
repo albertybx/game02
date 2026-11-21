@@ -33,7 +33,7 @@ class GameScene extends Phaser.Scene {
     this.round = 1;
     this.current = 0;
     this.gameOver = false;
-    this.tileState = TILES.map(() => ({ owner: null, level: 0, since: 0, bonus: 0 }));
+    this.tileState = TILES.map(() => ({ owner: null, level: 0, since: 0, bonus: 0, favor: [0, 0, 0, 0] }));
     this.generals = new GeneralSystem(this);
     this.players = [];
     for (let i = 0; i < this.playerCount; i++) {
@@ -42,9 +42,11 @@ class GameScene extends Phaser.Scene {
         ...CHARACTERS[i],
         money: GAME_RULES.startMoney,
         fans: GAME_RULES.startFans,
-        pos: 0,
+        pos: i * GAME_RULES.startSpread, // 起點錯開，先擲骰的人才不會太有利
         skip: 0,
         bankrupt: false,
+        rallies: 0,     // 辦過幾次造勢晚會
+        debated: false, // 發起過辯論挑戰了沒
         human: this.mode === 'hotseat' || i === 0,
       });
     }
@@ -69,6 +71,7 @@ class GameScene extends Phaser.Scene {
     TILES.forEach((t, i) => this.refreshTile(i));
     this.stationIcons = [];
     this.drawTrees();
+    this.drawDistrictSigns();
     this.createTokens();
     this.setupCamera();
 
@@ -422,7 +425,22 @@ class GameScene extends Phaser.Scene {
       this.diamond(mk, x, y, 34, 17, st.owner === null ? UNOWNED_COLOR : hex(this.players[st.owner].color));
       this.diamondLine(mk, x, y, 34, 17, 2, 0x000000);
     }
-    if (st.owner === null) return;
+    if (st.owner === null) {
+      if (TILES[i].type === 'chief') {
+        st.favor.forEach((f, pid) => {
+          if (!f || !this.players[pid]) return;
+          const g = this.add.graphics();
+          for (let k = 0; k < f; k++) {
+            g.fillStyle(0x000000, 1);
+            g.fillCircle(-36 + pid * 22, 14 - k * 14, 8);
+            g.fillStyle(hex(this.players[pid].color), 1);
+            g.fillCircle(-36 + pid * 22, 14 - k * 14, 6);
+          }
+          ov.add(g);
+        });
+      }
+      return;
+    }
     const color = hex(this.players[st.owner].color);
     const g = this.add.graphics();
     this.diamondLine(g, 0, 0, ISO_W - 8, ISO_H - 4, 6, color);
@@ -434,6 +452,24 @@ class GameScene extends Phaser.Scene {
     };
     ov.add(makeFlag(-44, 8, 44));
     for (let k = 0; k < st.level; k++) ov.add(makeFlag(38 - k * 16, 12 + k * 6, 34));
+  }
+
+  // 行政區看板：每一區的第一格旁邊立一塊牌子，看得出哪幾格是同一區
+  drawDistrictSigns() {
+    TILES.forEach((t, i) => {
+      if (!t.district || TILES.findIndex((x) => x.district === t.district) !== i) return;
+      const n = TILES.filter((x) => x.district === t.district).length;
+      const cell = this.lotCell(i);
+      const { x, y } = this.iso(cell.col, cell.row);
+      const c = this.add.container(x - 46, y - 18).setDepth(y + 24);
+      const txt = this.add.text(0, -30, `${t.district}${n > 1 ? ` ${n}格` : ''}`, {
+        fontFamily: FONT, fontSize: '17px', color: '#ffffff', backgroundColor: '#1d2b53', padding: { x: 5, y: 2 },
+      }).setOrigin(0.5, 1);
+      const g = this.add.graphics();
+      g.fillStyle(0x5f574f, 1);
+      g.fillRect(-2, -30, 4, 30);
+      c.add([g, txt]);
+    });
   }
 
   // 駐守中的戰將：站在里長辦公處旁邊，腳下有陣營顏色的圈
@@ -616,15 +652,20 @@ class GameScene extends Phaser.Scene {
     this.bounceToken(p);
     this.hud.showTile(p.pos, p);
 
-    this.generals.onTurnStart(p);
+    // 出任務的戰將回來
+    await this.generals.onTurnStart(p);
 
-    // 【A】每回合開始，自己的地標和里長會帶來支持者
+    // 【A】每回合開始，自己的地標和里長會帶來支持者（還有整區加成）
     const income = this.fansIncomeOf(p);
     let incomeMsg = '';
     if (income > 0) {
-      this.changeFans(p, income);
-      incomeMsg = `\n地盤帶來支持者 +${income}`;
+      const got = this.changeFans(p, income);
+      incomeMsg = `\n地盤支持者 +${got}${this.districtBonusOf(p) ? '（含整區）' : ''}`;
     }
+    // 地標租金、里長經營費
+    const up = await this.payUpkeep(p);
+    incomeMsg = incomeMsg ? incomeMsg + up : up.replace(/^，/, '\n');
+    if (p.bankrupt) return;
 
     if (p.skip > 0) {
       p.skip--;
@@ -635,8 +676,8 @@ class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.hud.say(p.human ? `輪到 ${p.name}！按「擲骰子」出發${incomeMsg}` : `輪到 ${p.name}（電腦）…${incomeMsg}`);
-    await this.hud.choose([{ label: '擲骰子', value: 1, fill: 0xff004d }], p, 1);
+    await this.preRoll(p, incomeMsg);
+    if (p.bankrupt) return;
     this.followPlayer(p);
     const roll = await this.hud.rollDice();
     this.hud.say(`${p.name} 擲出 ${roll} 點！`);
@@ -729,7 +770,7 @@ class GameScene extends Phaser.Scene {
   }
 
   fansIncomeOf(p) {
-    return this.tileState.reduce((n, s, i) => n + (s.owner === p.id ? this.fansPerTurnOf(i) : 0), 0);
+    return this.tileState.reduce((n, s, i) => n + (s.owner === p.id ? this.fansPerTurnOf(i) : 0), 0) + this.districtBonusOf(p);
   }
 
   upgradeCost(i) { return Math.round(TILES[i].price / 2); }
@@ -748,7 +789,9 @@ class GameScene extends Phaser.Scene {
   }
 
   // 支持者增減：畫面上飄出藍色的「+300 支持」
-  changeFans(p, amount, silent = false) {
+  // raw = true：不套用選前衝刺倍數（倒戈的另一半，數字已經算過了）
+  changeFans(p, amount, silent = false, raw = false) {
+    if (!raw) amount = Math.round(amount * this.fansMult());
     const before = p.fans;
     p.fans = Math.max(0, p.fans + amount);
     const diff = p.fans - before;
@@ -771,6 +814,7 @@ class GameScene extends Phaser.Scene {
 
   // 付錢給某人（to = null 代表付給銀行）。付不出來就破產。
   async pay(p, amount, to = null) {
+    if (p.money < amount) await this.sellToCover(p, amount);
     const paid = Math.min(amount, Math.max(p.money, 0));
     this.changeMoney(p, -amount);
     if (to) {
@@ -782,11 +826,30 @@ class GameScene extends Phaser.Scene {
     if (p.money < 0) await this.goBankrupt(p);
   }
 
+  // 錢不夠付：先把地盤半價賣回給銀行（便宜的先賣），還是不夠才破產
+  async sellToCover(p, amount) {
+    const value = (i) => Math.round((TILES[i].price + this.tileState[i].level * this.upgradeCost(i)) / 2);
+    const mine = TILES.map((t, i) => i).filter((i) => this.tileState[i].owner === p.id).sort((a, b) => value(a) - value(b));
+    const sold = [];
+    for (const i of mine) {
+      if (p.money >= amount) break;
+      p.money += value(i);
+      sold.push(TILES[i].name);
+      this.loseTile(i);
+    }
+    if (!sold.length) return;
+    this.hud.say(`${p.name} 錢不夠，\n半價變賣了 ${sold.join('、')}`);
+    this.hud.refreshPanels();
+    Sfx.bad();
+    await this.wait(1300);
+  }
+
   async goBankrupt(p) {
     p.bankrupt = true;
     p.money = 0;
     this.tileState.forEach((s, i) => {
-      if (s.owner === p.id) { s.owner = null; s.level = 0; this.refreshTile(i); }
+      if (s.owner === p.id) this.loseTile(i);
+      s.favor[p.id] = 0;
     });
     this.generals.release(p);
     this.tokens[p.id].setVisible(false);
@@ -795,6 +858,143 @@ class GameScene extends Phaser.Scene {
     this.hud.refreshPanels();
     this.hud.say(`${p.name} 選舉經費燒光了…\n宣布退出選戰！`);
     await this.wait(1800);
+  }
+
+  // ---------- 擲骰子前：造勢晚會、遠端派任務、辯論挑戰 ----------
+  preRollActions(p) {
+    const R = GAME_RULES;
+    const acts = [];
+    if (p.rallies < R.rallyMax && p.money >= R.rallyCost) {
+      acts.push({ key: 'rally', label: `造勢晚會：花 $${R.rallyCost}，支持者 +${R.rallyFans}`, note: `每場 ${R.rallyMax} 次，還剩 ${R.rallyMax - p.rallies} 次` });
+    }
+    if (this.generals.canRemote(p)) acts.push({ key: 'remote', label: '遠端派戰將出任務', note: `不用走到里長格，效果 ×${GENERAL_RULES.remoteRate}` });
+    const leader = this.generals.debateTarget(p);
+    if (leader) acts.push({ key: 'debate', label: `向 ${leader.name} 發起辯論挑戰`, note: `花 $${R.debateCost}，贏了 +${R.debateFans}、輸了 -${R.debateLoseFans} 位支持者，每場一次` });
+    if (this.generals.wooTargets(p).length) acts.push({ key: 'woo', label: '派戰將去拉攏里長', note: `拜訪過一次的里長，派戰將去完成拉攏（${GENERAL_RULES.wooTurns} 回合）` });
+    return acts;
+  }
+
+  cpuPreRoll(p) {
+    const R = GAME_RULES;
+    if (this.generals.cpuWantsDebate(p)) return 'debate';
+    if (this.generals.cpuWoo(p)) return 'woo';
+    if (p.rallies < R.rallyMax && p.money >= 700 && this.round > R.maxRounds / 2) return 'rally';
+    if (this.generals.cpuWantsRemote(p)) return 'remote';
+    return null;
+  }
+
+  async preRoll(p, msg) {
+    const done = new Set(); // 電腦：每種行動一回合最多一次
+    for (;;) {
+      const acts = this.preRollActions(p);
+      this.hud.say(p.human
+        ? `輪到 ${p.name}！${acts.length ? '先「行動」或' : '按'}「擲骰子」${msg}`
+        : `輪到 ${p.name}（電腦）…${msg}`);
+      msg = '';
+      if (!acts.length) {
+        await this.hud.choose([{ label: '擲骰子', value: 'roll', fill: 0xff004d }], p, 'roll');
+        return;
+      }
+      let pick = null;
+      if (!p.human) {
+        const c = this.cpuPreRoll(p);
+        if (c && !done.has(c) && acts.some((a) => a.key === c)) pick = c;
+      }
+      const v = await this.hud.choose([
+        { label: '擲骰子', value: 'roll', fill: 0xff004d },
+        { label: '行動…', value: 'act', fill: 0x00e436 },
+      ], p, pick ? 'act' : 'roll');
+      if (v === 'roll') return;
+      if (p.human) {
+        pick = await gvModal({
+          title: '擲骰子前的行動', color: '#00e436', who: p,
+          body: `<div class="gv-actions">${acts.map((a) => `<button type="button" data-v="${a.key}">${escapeHTML(a.label)}<small>${escapeHTML(a.note)}</small></button>`).join('')}</div>
+            <button type="button" class="gv-skip" data-v="back">返回</button>`,
+        });
+        if (pick === 'back') continue;
+      }
+      done.add(pick);
+      if (pick === 'rally') await this.rally(p);
+      else if (pick === 'remote') await this.generals.remoteMission(p);
+      else if (pick === 'debate') await this.generals.debate(p);
+      else if (pick === 'woo') await this.generals.woo(p);
+      if (p.bankrupt) return;
+    }
+  }
+
+  async rally(p) {
+    const R = GAME_RULES;
+    p.rallies++;
+    this.hud.say(`${p.name} 舉辦造勢晚會！\n花 $${R.rallyCost}`);
+    this.changeMoney(p, -R.rallyCost);
+    await this.wait(600);
+    const got = this.changeFans(p, R.rallyFans);
+    Sfx.tune([523, 659, 784, 1047], 0.08);
+    this.hud.say(`造勢晚會人山人海！\n支持者 +${got}`);
+    await this.wait(1000);
+  }
+
+  // ---------- 地標租金、里長經營費 ----------
+  chiefFeeOf(i) { return Math.round(TILES[i].price * GAME_RULES.chiefFeeRate); }
+
+  landmarkUpkeepOf(i) {
+    return Math.round(TILES[i].price * GAME_RULES.landmarkUpkeepRate * (this.tileState[i].level + 1));
+  }
+
+  // 付不出來不會破產，而是失去那一格
+  async payUpkeep(p) {
+    const R = GAME_RULES;
+    let paid = 0;
+    let msg = '';
+    const lost = [];
+    // 里長：每擁有 3 回合付一次經營費
+    for (const i of this.generals.ownChiefs(p)) {
+      const held = this.round - this.tileState[i].since;
+      if (held <= 0 || held % R.chiefFeeEvery !== 0) continue;
+      const fee = this.chiefFeeOf(i);
+      if (p.money >= fee) { p.money -= fee; paid += fee; } else lost.push(i);
+    }
+    // 地標：每回合付租金（貴的先付）
+    let rent = 0;
+    const lands = TILES.map((t, i) => i).filter((i) => TILES[i].type === 'property' && this.tileState[i].owner === p.id)
+      .sort((a, b) => this.landmarkUpkeepOf(b) - this.landmarkUpkeepOf(a));
+    for (const i of lands) {
+      const r = this.landmarkUpkeepOf(i);
+      if (p.money >= r) { p.money -= r; rent += r; } else lost.push(i);
+    }
+    paid += rent;
+    if (paid) msg += `，租金和經營費 -$${paid}`;
+    if (paid) {
+      const { x, y } = this.tokenPos(p);
+      this.floatText(x, y - 80, `-$${paid}`, '#ff004d');
+      Sfx.pay();
+    }
+    for (const i of lost) {
+      this.loseTile(i);
+      msg += `\n付不出錢，失去 ${TILES[i].name}！`;
+    }
+    if (lost.length) Sfx.bad();
+    this.hud.refreshPanels();
+    return msg;
+  }
+
+  loseTile(i) {
+    Object.assign(this.tileState[i], { owner: null, level: 0, bonus: 0, favor: [0, 0, 0, 0] });
+    this.generals.guardBack(i);
+    this.refreshTile(i);
+  }
+
+  // 整區加成：同一區（2 格以上）全部拿下
+  districtBonusOf(p) {
+    return DISTRICTS.filter((d) => TILES.filter((t) => t.district === d).length >= 2 && this.ownsDistrict(p.id, d)).length * GAME_RULES.districtBonus;
+  }
+
+  // 選前衝刺：最後幾回合支持者的增減越來越大
+  fansMult() {
+    const R = GAME_RULES;
+    const n = Math.min(R.finalRounds, Math.ceil(R.maxRounds / 2));
+    const k = Math.min(this.round, R.maxRounds) - (R.maxRounds - n);
+    return k >= 1 ? Math.round((1 + R.finalStep * k * (R.finalRounds / n)) * 10) / 10 : 1;
   }
 
   // ---------- 走到格子上會發生的事 ----------
@@ -857,6 +1057,7 @@ class GameScene extends Phaser.Scene {
 
   async offerBuy(p, i) {
     const t = TILES[i];
+    if (t.type === 'chief') { await this.offerChief(p, i); return; }
     const canBuy = p.money >= t.price;
     const what = t.type === 'chief' ? `拉攏 ${t.name}` : `買下 ${t.name}`;
     this.hud.say(`${t.name} 還沒有人插旗！\n要花 $${t.price} ${what} 嗎？${canBuy ? '' : '\n（錢不夠…）'}`);
@@ -884,6 +1085,55 @@ class GameScene extends Phaser.Scene {
       this.hud.say(`${p.name} 決定先不買。`);
       await this.wait(700);
     }
+  }
+
+  // 里長：要拜訪 2 次（每次付一半價錢）才拉攏得到，好感度是每個人自己的
+  async offerChief(p, i) {
+    const t = TILES[i];
+    const st = this.tileState[i];
+    const R = GAME_RULES;
+    const need = R.chiefVisits;
+    const cost = Math.round(t.price / need);
+    const last = st.favor[p.id] + 1 >= need;
+    const canPay = p.money >= cost;
+    this.hud.say((last
+      ? `${t.name} 跟你已經很熟了！\n再花 $${cost} 就能拉攏，要嗎？`
+      : `${t.name} 還沒有人拉攏。花 $${cost} 拜訪建立好感？\n（好感 ${st.favor[p.id]}/${need}，滿了才拉攏得到）`) + (canPay ? '' : '\n（錢不夠…）'));
+    const ans = await this.hud.choose([
+      { label: `${last ? '拉攏' : '拜訪'} $${cost}`, value: true, fill: 0x00e436, disabled: !canPay },
+      { label: '不要', value: false, fill: 0xc2c3c7 },
+    ], p, canPay && p.money - cost >= 200);
+    if (!ans) {
+      this.hud.say(`${p.name} 決定先不要。`);
+      await this.wait(700);
+      return;
+    }
+    p.money -= cost;
+    st.favor[p.id]++;
+    if (!last) {
+      this.refreshTile(i);
+      Sfx.coin();
+      this.hud.say(`${p.name} 拜訪了 ${t.name}，好感 ${st.favor[p.id]}/${need}。\n下次再來就能拉攏！`);
+      this.hud.refreshPanels();
+      await this.wait(1000);
+      return;
+    }
+    await this.acquireChief(p, i);
+  }
+
+  async acquireChief(p, i) {
+    const t = TILES[i];
+    const st = this.tileState[i];
+    const R = GAME_RULES;
+    Object.assign(st, { owner: p.id, since: this.round, bonus: 0, favor: [0, 0, 0, 0] });
+    this.refreshTile(i);
+    this.hud.showTile(i, p);
+    Sfx.buy();
+    this.flashTile(i);
+    const gain = this.changeFans(p, R.chiefBuyFans, true);
+    this.hud.say(`${p.name} 拉攏了 ${t.name}！支持者 +${gain}\n之後每回合 +${this.fansPerTurnOf(i)}，每 ${R.chiefFeeEvery} 回合付經營費 $${this.chiefFeeOf(i)}`);
+    this.hud.refreshPanels();
+    await this.wait(1200);
   }
 
   async offerUpgrade(p, i) {
@@ -924,7 +1174,7 @@ class GameScene extends Phaser.Scene {
     await this.pay(p, rent, owner);
     if (!p.bankrupt) {
       const lost = -this.changeFans(p, -steal, true);
-      this.changeFans(owner, lost);
+      this.changeFans(owner, lost, false, true);
     }
     await this.wait(900);
   }
@@ -975,7 +1225,7 @@ class GameScene extends Phaser.Scene {
       for (const o of this.players) {
         if (o.id === p.id || o.bankrupt) continue;
         const lost = -this.changeFans(o, -card.fansFromEach, true);
-        this.changeFans(p, lost);
+        this.changeFans(p, lost, false, true);
         await this.wait(300);
       }
     }
@@ -1037,10 +1287,11 @@ class GameScene extends Phaser.Scene {
     const owner = st.owner === null ? '還沒有人買' : `地主：${this.players[st.owner].name}`;
     const rent = this.rentOf(i);
     if (t.type === 'chief') {
-      this.hud.say(`【${t.name}】價格 $${t.price}\n${owner}\n每回合支持者 +${this.fansPerTurnOf(i)}，過路費 $${rent}`);
+      const favor = st.owner === null ? this.players.filter((q) => st.favor[q.id]).map((q) => `${q.name} ${st.favor[q.id]}/${GAME_RULES.chiefVisits}`).join('、') : '';
+      this.hud.say(`【${t.name}】價格 $${t.price}（拜訪 ${GAME_RULES.chiefVisits} 次）\n${owner}${favor ? `・好感：${favor}` : ''}\n每回合支持者 +${this.fansPerTurnOf(i)}，過路費 $${rent}，每 ${GAME_RULES.chiefFeeEvery} 回合經營費 $${this.chiefFeeOf(i)}`);
       return;
     }
-    this.hud.say(`【${t.name}】${t.district}・價格 $${t.price}\n${owner}・總部 ${st.level} 層\n每回合支持者 +${this.fansPerTurnOf(i)}，過路費 $${rent}`);
+    this.hud.say(`【${t.name}】${t.district}・價格 $${t.price}\n${owner}・總部 ${st.level} 層\n每回合支持者 +${this.fansPerTurnOf(i)}，過路費 $${rent}，租金每回合 $${this.landmarkUpkeepOf(i)}`);
   }
 
   // ---------- 遊戲結束 ----------

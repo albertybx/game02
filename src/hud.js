@@ -123,7 +123,9 @@ class HudScene extends Phaser.Scene {
       pan.c.setAlpha(p.bankrupt ? 0.45 : 1);
       pan.highlight.setVisible(i === gs.current && !gs.gameOver);
     });
-    this.roundChip.setText(`第 ${Math.min(gs.round, GAME_RULES.maxRounds)} / ${GAME_RULES.maxRounds} 回合`);
+    const mult = gs.fansMult();
+    this.roundChip.setText(`第 ${Math.min(gs.round, GAME_RULES.maxRounds)} / ${GAME_RULES.maxRounds} 回合${mult > 1 ? `・選前衝刺 支持者 ×${mult}` : ''}`);
+    this.roundChip.setBackgroundColor(mult > 1 ? '#7e2553' : '#1d2b53');
     this.refreshPoll();
   }
 
@@ -263,11 +265,12 @@ class HudScene extends Phaser.Scene {
     if (!this.plate) return;
     const t = TILES[i];
     const st = this.gs.tileState[i];
+    const dn = t.district ? TILES.filter((x) => x.district === t.district).length : 0;
     const kind = {
       go: `經過領 $${GAME_RULES.passGoBonus}`, jam: '下回合暫停一次', mrt: '休息一下', tow: `罰款 $${GAME_RULES.towFine}`,
-      chance: '抽一張機會卡', fate: '抽一張命運卡', talent: '遇到政壇前輩',
+      chance: '抽一張機會卡', fate: '抽一張命運卡', talent: '招募戰將',
       quiz: `答對 $${GAME_RULES.quizMoney}、支持者 +${GAME_RULES.quizFans}`,
-      property: `${t.district}・地標 $${t.price}`, chief: `${t.district}・里長 $${t.price}`,
+      property: `${t.district}${dn > 1 ? `（${dn} 格）` : ''}・地標 $${t.price}`, chief: `${t.district}${dn > 1 ? `（${dn} 格）` : ''}・里長 $${t.price}`,
     }[t.type] || '';
     const owner = st && st.owner !== null ? `・${this.gs.players[st.owner].name}的地盤` : '';
     this.plateName.setText(t.name);
