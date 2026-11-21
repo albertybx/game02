@@ -97,7 +97,6 @@ class HudScene extends Phaser.Scene {
     makeButton(this, zx, top + 338, 60, 54, '紀錄', { fill: 0x29adff, fontSize: '20px', onClick: () => this.showLog() });
 
     this.drawPoll(top + 44);
-    this.pollBox.setVisible(false); // 即時民調先不顯示（要恢復就把這行刪掉）
     this.drawTilePlate(top);
   }
 
@@ -282,7 +281,9 @@ class HudScene extends Phaser.Scene {
     c.add(this.add.text(10, 6, '即時民調', { fontFamily: FONT, fontSize: `${Math.round(18 * S)}px`, color: '#ffec27' }));
 
     // 切換按鈕（顯示「另一種」圖的名字）
-    try { this.pollMode = localStorage.getItem('pollMode') === 'pie' ? 'pie' : 'bar'; } catch (e) { this.pollMode = 'bar'; }
+    // 圓餅圖先隱藏，只用長條圖（要恢復：把 SHOW_PIE 改成 true）
+    const SHOW_PIE = false;
+    try { this.pollMode = SHOW_PIE && localStorage.getItem('pollMode') === 'pie' ? 'pie' : 'bar'; } catch (e) { this.pollMode = 'bar'; }
     const tb = makeButton(this, pw - Math.round(38 * S), Math.round(17 * S), Math.round(64 * S), Math.round(26 * S), '', {
       fill: 0xfff1e8, fontSize: `${Math.round(15 * S)}px`,
       onClick: () => {
@@ -292,6 +293,7 @@ class HudScene extends Phaser.Scene {
       },
     });
     c.add(tb);
+    tb.setVisible(SHOW_PIE);
     this.pollToggle = tb;
 
     const hs = Math.round(24 * S);
