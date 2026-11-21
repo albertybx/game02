@@ -4,7 +4,7 @@
 const GAME_RULES = {
   startMoney: 2000,   // 每人一開始的錢
   passGoBonus: 300,   // 經過起點拿的錢
-  maxRounds: 20,      // 第幾回合結束就是「投票日」，比誰的支持者最多
+  maxRounds: 30,      // 第幾回合結束就是「投票日」，比誰的支持者最多
   startFans: 1000,    // 每人一開始的支持者
   maxLevel: 3,        // 空地最多蓋到第幾階段（3 = 地標完工）
   rentMultiplier: [1, 3, 7, 14], // 空地 0 → 工地 1 → 小建築 2 → 地標 3：過路費是基本過路費的幾倍
@@ -33,7 +33,7 @@ const GAME_RULES = {
   rallyCost: 150,       // 造勢晚會：擲骰子前可以花錢辦
   rallyFans: 200,       //   換到的支持者
   rallyMax: 2,          //   每場最多辦幾次
-  finalRounds: 10,      // 選前衝刺：最後 10 回合（10 回合的短局是最後 5 回合），支持者的增減一回合比一回合大
+  finalRounds: 10,      // 選前衝刺：最後 10 回合，支持者的增減一回合比一回合大
   finalStep: 0.1,       //   每回合多 10%（最後一回合 ×2）
   debateGap: 600,       // 辯論挑戰：下半場，落後第一名這麼多支持者時可以發起
   debateCost: 100,
@@ -49,7 +49,7 @@ const GAME_RULES = {
 };
 
 // 首頁可以選的回合數
-const ROUND_OPTIONS = [10, 20, 30];
+const ROUND_OPTIONS = [30, 50, 80];
 
 // 台北市 12 個行政區（照路線順序）
 const DISTRICTS = ['中正區', '萬華區', '大同區', '中山區', '士林區', '北投區', '內湖區', '松山區', '南港區', '信義區', '文山區', '大安區'];

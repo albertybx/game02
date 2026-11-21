@@ -6,9 +6,9 @@ class TitleScene extends Phaser.Scene {
 
   init() {
     // 首頁的選項（會記住上次的選擇）
-    this.opts = { playerCount: 4, mode: 'cpu', rounds: 20, quiz: false, quizLevel: 'junior' };
+    this.opts = { playerCount: 4, mode: 'cpu', rounds: 30, quiz: false, quizLevel: 'junior' };
     try { Object.assign(this.opts, JSON.parse(localStorage.getItem('options') || '{}')); } catch (e) { /* 讀不到就用預設 */ }
-    if (!ROUND_OPTIONS.includes(this.opts.rounds)) this.opts.rounds = 20;
+    if (!ROUND_OPTIONS.includes(this.opts.rounds)) this.opts.rounds = 30;
     this.rows = [];
   }
 
