@@ -260,7 +260,7 @@ class HudScene extends Phaser.Scene {
       </div>`).join('');
     gvModal({
       title: '事件紀錄', color: '#29adff',
-      body: `<p class="gv-tip">最新的在最上面（最多 80 筆）。</p>${rows || '<p class="gv-sub">還沒有事件</p>'}<button type="button" class="gv-skip" data-v="close">關閉</button>`,
+      body: `<button type="button" class="gv-skip gv-close-top" data-v="close">關閉</button><p class="gv-tip">最新的在最上面（最多 80 筆）。</p>${rows || '<p class="gv-sub">還沒有事件</p>'}`,
     });
   }
 
@@ -457,15 +457,17 @@ class HudScene extends Phaser.Scene {
     this.showEvent(text, this.boxOn > 0);
   }
 
-  layoutDice() {
-    const two = GAME_RULES.dice === 2;
+  layoutDice(n = GAME_RULES.dice, cpu = false) {
+    const two = n === 2;
     this.dice[0].setX(two ? this.diceX - 26 : this.diceX);
     this.dice[1].setVisible(two);
-    this.diceLabel.setText(`${GAME_RULES.dice} 顆・點我換`);
+    this.diceLabel.setText(cpu ? `電腦擲 ${n} 顆` : `${n} 顆・點我換`);
   }
 
-  async rollDice() {
+  // n = 擲幾顆（電腦會自己決定；玩家用自己設定的）
+  async rollDice(n = GAME_RULES.dice, cpu = false) {
     this.rolling = true;
+    this.layoutDice(n, cpu);
     const prog = { v: 0 };
     let lastFace = -1;
     await new Promise((res) => this.tweens.add({
@@ -480,11 +482,11 @@ class HudScene extends Phaser.Scene {
       },
     }));
     const faces = this.dice.map(() => Phaser.Math.Between(1, 6));
-    this.dice.forEach((d, k) => d.setTexture(`dice${faces[k]}`).setAngle(0).setVisible(k < GAME_RULES.dice));
+    this.dice.forEach((d, k) => d.setTexture(`dice${faces[k]}`).setAngle(0).setVisible(k < n));
     Sfx.beep(880, 0.08);
     await new Promise((res) => this.tweens.add({ targets: this.dice, scale: 4.2, duration: 100, yoyo: true, onComplete: res }));
     this.rolling = false;
-    return faces.slice(0, GAME_RULES.dice).reduce((a, b) => a + b, 0);
+    return faces.slice(0, n).reduce((a, b) => a + b, 0);
   }
 
   // 顯示按鈕，等玩家選；電腦玩家會自動選 auto

@@ -77,7 +77,6 @@ class GameScene extends Phaser.Scene {
     this.stationIcons = [];
     this.drawTrees();
     this.bakeStatic();
-    this.drawDistrictSigns();
     this.createTokens();
     this.setupCamera();
 
@@ -352,6 +351,7 @@ class GameScene extends Phaser.Scene {
       // 路面：有 AI 柏油路就用，沒有就畫灰色菱形
       if (this.textures.exists('bld_road_tile')) {
         this.keepStatic(this.add.image(x, y, 'bld_road_tile').setDepth(-801));
+        this.addNameZone(this.add.zone(x, y, ISO_W - 10, ISO_H - 6).setDepth(-790), i);
         this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30, 0.5);
       } else {
         this.diamond(g, x, y + 4, ISO_W, ISO_H, 0x3b3b44);
@@ -417,6 +417,7 @@ class GameScene extends Phaser.Scene {
 
       // 點建築看資訊（拖曳地圖時不算）
       hit.setInteractive();
+      this.addNameZone(hit, i);
       hit.on('pointerup', (p) => {
         if (p.getDistance() < 12) this.showTileInfo(i);
       });
@@ -546,6 +547,35 @@ class GameScene extends Phaser.Scene {
       g.fillRect(-2, -30, 4, 30);
       c.add([g, txt]);
     });
+  }
+
+  // 格子名稱：電腦滑鼠移過去、手機手指點一下，格子上方會出現名字
+  addNameZone(zone, i) {
+    zone.setInteractive();
+    zone.on('pointerover', (p) => { if (!p.wasTouch) this.showNameTag(i); });
+    zone.on('pointerout', (p) => { if (!p.wasTouch) this.hideNameTag(i); });
+    zone.on('pointerup', (p) => { if (p.getDistance() < 12) this.showNameTag(i, 2500); });
+  }
+
+  showNameTag(i, autoHide = 0) {
+    if (!this.nameTag) {
+      this.nameTag = this.add.text(0, 0, '', {
+        fontFamily: FONT, fontSize: '22px', color: '#ffffff', backgroundColor: '#1d2b53', padding: { x: 8, y: 4 },
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5, 1).setDepth(7000);
+    }
+    const t = TILES[i];
+    const cell = (t.type === 'property' || t.type === 'chief') && this.lotCell(i) ? this.lotCell(i) : this.ringCell(i);
+    const { x, y } = this.iso(cell.col, cell.row);
+    this.nameTag.setText(`${this.tileName(i)}${t.district && !this.tileName(i).startsWith(t.district) ? `・${t.district}` : ''}`)
+      .setPosition(x, y - 46).setScale(1 / Math.max(this.cameras.main.zoom, 0.8)).setVisible(true);
+    this.nameTagFor = i;
+    if (this.nameTagTimer) this.nameTagTimer.remove();
+    this.nameTagTimer = autoHide ? this.time.delayedCall(autoHide, () => this.hideNameTag(i)) : null;
+  }
+
+  hideNameTag(i) {
+    if (this.nameTag && this.nameTagFor === i) this.nameTag.setVisible(false);
   }
 
   // 駐守中的戰將：站在里長辦公處旁邊，腳下有陣營顏色的圈
@@ -763,8 +793,10 @@ class GameScene extends Phaser.Scene {
     await this.preRoll(p, incomeMsg);
     if (p.bankrupt) return;
     this.followPlayer(p);
-    const roll = await this.hud.rollDice();
-    this.hud.say(`${p.name} 擲出 ${roll} 點！`);
+    if (p.human) this.hud.layoutDice();
+    const n = p.human ? GAME_RULES.dice : this.cpuDiceCount(p);
+    const roll = await this.hud.rollDice(n, !p.human);
+    this.hud.say(p.human ? `${p.name} 擲出 ${roll} 點！` : `${p.name} 擲 ${n} 顆骰子，擲出 ${roll} 點！`);
     await this.walk(p, roll);
     await this.resolveTile(p);
     this.hud.refreshPanels();
@@ -992,6 +1024,26 @@ class GameScene extends Phaser.Scene {
     this.hud.refreshPanels();
     this.hud.say(`${p.name} 選舉經費燒光了…\n宣布退出選戰！`);
     await this.wait(1800);
+  }
+
+  // 電腦：看前面 12 格，比較擲 1 顆和 2 顆，哪個比較不會踩到對手的地盤
+  cpuDiceCount(p) {
+    const value = (j) => {
+      const t = TILES[j];
+      const st = this.tileState[j];
+      if (t.type === 'property' || t.type === 'chief') {
+        if (st.owner === null) return p.money >= (t.price || 0) + 200 ? 60 : 0;
+        if (st.owner === p.id) return t.type === 'property' && st.level < GAME_RULES.maxLevel ? 30 : 10;
+        return -(this.rentOf(j) + this.stealOf(j));
+      }
+      return { chance: 40, fate: -30, tow: -GAME_RULES.towFine, jam: -80, talent: p.money >= 500 ? 30 : 0, quiz: 40, mrt: 0, go: 0 }[t.type] || 0;
+    };
+    const at = (k) => value((p.pos + k) % TILES.length);
+    let one = 0;
+    for (let k = 1; k <= 6; k++) one += at(k) / 6;
+    let two = 0;
+    for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) two += at(a + b) / 36;
+    return one > two ? 1 : 2;
   }
 
   // ---------- 擲骰子前：造勢晚會、遠端派任務、辯論挑戰 ----------
