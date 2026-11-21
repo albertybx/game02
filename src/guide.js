@@ -40,10 +40,32 @@ function guideHTML() {
     <section>
       <h3>每回合會發生什麼</h3>
       <ol>
-        <li>你擁有的<b>地標和里長</b>先幫你帶來支持者（地盤越大越多）。</li>
-        <li>擲骰子，往前走。</li>
+        <li>出任務的戰將回來，帶回支持者。</li>
+        <li>你擁有的<b>地標和里長</b>帶來支持者；同時付<b>地標租金</b>（每回合）和<b>里長經營費</b>（每 ${R.chiefFeeEvery} 回合）。付不出來就會失去那一格。</li>
+        <li>擲骰子前可以按「<b>行動</b>」（見下面），然後擲骰子往前走。</li>
         <li>停在哪一格，就發生那一格的事。</li>
       </ol>
+      <p>大家的起點是錯開的（每人往前 ${R.startSpread} 格），先擲骰子的人才不會太佔便宜。</p>
+    </section>
+
+    <section>
+      <h3>擲骰子前的「行動」</h3>
+      <ul>
+        <li><b>造勢晚會</b>：花 $${R.rallyCost}，支持者 + ${R.rallyFans}。每場最多 ${R.rallyMax} 次。</li>
+        <li><b>遠端派戰將出任務</b>：不用走到里長格也能派，但效果 ×${GR.remoteRate}。</li>
+        <li><b>派戰將去拉攏里長</b>：你拜訪過一次的里長，可以派戰將去完成拉攏（${GR.wooTurns} 回合）。</li>
+        <li><b>辯論挑戰</b>：下半場落後第一名 ${R.debateGap} 位以上，可以花 $${R.debateCost} 向第一名下戰帖。贏了：第一名有 ${R.debateFans} 位支持者倒戈給你；輸了：你有 ${R.debateLoseFans} 位倒戈給他。每人每場一次。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>選前衝刺</h3>
+      <p>最後 ${R.finalRounds} 回合（10 回合的短局是最後 5 回合），所有支持者的增減會<b>一回合比一回合大</b>，最後一回合是 2 倍。左上角會顯示目前的倍數。落後的人別放棄！</p>
+    </section>
+
+    <section>
+      <h3>錢不夠怎麼辦</h3>
+      <p>付過路費、罰款時錢不夠，會先把你的地盤<b>半價賣回給銀行</b>（便宜的先賣），還是不夠才破產。</p>
     </section>
 
     <section>
@@ -52,14 +74,16 @@ function guideHTML() {
         <p>比較貴，主要用來<b>賺錢</b>。</p>
         <ul>
           <li>買下：支持者 + 價錢的 ${pct(R.buyFansRate)}。</li>
-          <li>每回合：帶來 價錢 × ${pct(R.landmarkFansRate)} ×（總部層數 + 1）位支持者。</li>
+          <li>每回合：帶來 價錢 × ${pct(R.landmarkFansRate)} ×（總部層數 + 1）位支持者，要付租金 價錢 × ${pct(R.landmarkUpkeepRate)} ×（總部層數 + 1）。</li>
           <li>再走到自己的地標，可以花價錢的一半蓋<b>競選總部</b>（最多 ${R.maxLevel} 層），支持者 + 價錢的 ${pct(R.buildFansRate)}，過路費變成 ${R.rentMultiplier.slice(1).join(' / ')} 倍。</li>
           <li>對手踩到：付過路費（價錢的 10% × 倍數），而且有 價錢 × ${pct(R.landmarkStealRate)} ×（層數 + 1）位支持者<b>倒戈</b>到你這邊。</li>
         </ul>`)}
       ${tile('chief', `里長（${chiefs.length} 區，${range(chiefs)}）`, `
         <p>比較便宜，主要用來<b>拉支持者</b>。</p>
         <ul>
+          <li>要<b>拜訪 ${R.chiefVisits} 次</b>才拉攏得到（每次付一半價錢）。第二次可以自己再走到，或派戰將去。好感度會用玩家顏色的小圓點顯示在里長格上。</li>
           <li>拉攏：支持者 + ${R.chiefBuyFans}。</li>
+          <li>每擁有 ${R.chiefFeeEvery} 回合，付一次地方經營費（價錢 × ${pct(R.chiefFeeRate)}），付不出來里長就跑掉。</li>
           <li>每回合：帶來 ${R.chiefFansPerTurn} 位支持者。</li>
           <li>不能蓋競選總部。</li>
           <li>對手踩到：付價錢 ${pct(R.chiefRentRate)} 的過路費，${R.chiefSteal} 位支持者倒戈。</li>
@@ -69,7 +93,7 @@ function guideHTML() {
       ${tile('go', '起點', `<p>經過或停在起點，領 $${R.passGoBonus}。</p>`)}
       ${tile('chance', `機會（${TILES.filter((t) => t.type === 'chance').length} 格）`, `<p>抽一張機會卡，大多是好事：拿錢、支持者增加、前進、名人站台……</p>`)}
       ${tile('ballot', `命運（${TILES.filter((t) => t.type === 'fate').length} 格）`, `<p>抽一張命運卡，有好有壞：被爆料、失言被罵、颱風吹走看板……</p>`)}
-      ${tile('talent', `戰將招募站（${TILES.filter((t) => t.type === 'talent').length} 格）`, `<p>翻 ${GR.recruitChoices} 張戰將卡，挑 1 位花 $${GR.recruitCost} 招募，也可以不要。每人最多 ${GR.maxPerPlayer} 位，滿了可以請一位離隊換人。對手忠誠度低於 ${GR.poachBelow} 的戰將，也可以在這裡<b>挖角</b>（成功才付 $${GR.poachCost}）。</p>`)}
+      ${tile('talent', `戰將招募站（${TILES.filter((t) => t.type === 'talent').length} 格）`, `<p>翻 ${GR.recruitChoices} 張戰將卡，挑 1 位花 $${GR.recruitCost} 招募，也可以不要。戰將人數沒有上限。對手忠誠度低於 ${GR.poachBelow} 的戰將，也可以在這裡<b>挖角</b>（成功才付 $${GR.poachCost}）。</p>`)}
       ${tile('quiz', '英文挑戰（首頁可選擇要不要加入）', `
         <p>隨機出一題英文<b>選擇題</b>或<b>填空題</b>，單字和句型都有。程度可以在首頁選：國小、國中、高中、大學。</p>
         <ul>
@@ -85,14 +109,15 @@ function guideHTML() {
     <section>
       <h3>戰將</h3>
       <p>戰將有三項能力（1～5）：<b>口才</b>、<b>人脈</b>、<b>魅力</b>，還有出身的行政區（在家鄉做事 +${GR.homeBonus}）。右上角「戰將」按鈕可以看各陣營的戰將。</p>
-      <p><b>在自己的里長格派任務</b>（出完任務休息 ${GR.missionRest} 回合）：</p>
+      <p><b>派任務</b>：戰將會離開隊伍幾回合，回來時帶回支持者。站在自己的里長格派，效果全額；擲骰子前遠端派，效果 ×${GR.remoteRate}。</p>
       <ul>
-        <li>跑紅白帖：看魅力，不花錢。</li>
-        <li>選民服務：看人脈，這一格的樁腳更穩，比較不容易被拔。</li>
-        <li>媒體宣傳：看口才，花 $${GR.mediaCost}，效果 ×${GR.mediaBonus}。</li>
-        <li>駐守：戰將留在這格，對手來拔樁時由他防守。駐守時要選一個「防守風格」（他最常出的招），對手看得到。</li>
+        <li>跑紅白帖（${MISSIONS[0].turns} 回合）：看魅力，不花錢。</li>
+        <li>選民服務（${MISSIONS[1].turns} 回合）：看人脈，那一格的樁腳更穩，比較不容易被拔。</li>
+        <li>媒體宣傳（${MISSIONS[2].turns} 回合）：看口才，花 $${GR.mediaCost}，效果 ×${GR.mediaBonus}。</li>
+        <li>駐守：站在自己的里長格時，可以讓戰將留下來防守。駐守後就<b>離開隊伍</b>，不能再派去別的地方；那一格被搶走時才會回來。駐守時要選一個「防守風格」（他最常出的招），對手看得到。</li>
       </ul>
-      <p><b>拔樁戰</b>（在對手的里長格）：三戰兩勝，每輪雙方各出一招。</p>
+      <p><b>專屬技能</b>：每位戰將都有一個，寫在戰將卡上（★）。</p>
+      <p><b>拔樁戰</b>（在對手的里長格）：三戰兩勝，每輪點一張牌出招，雙方擲骰子比分數。</p>
       <ul>
         <li>演講（口才）剋 造勢；造勢（魅力）剋 拜訪；拜訪（人脈）剋 演講。</li>
         <li>分數 = 能力 + 骰子（1～6）+ 剋到對方 ${GR.counterBonus} + 在家鄉 ${GR.homeBonus}。平手算守方贏。</li>
@@ -105,7 +130,11 @@ function guideHTML() {
 
     <section>
       <h3>行政區</h3>
-      <p>台北市有 ${DISTRICTS.length} 個行政區。把<b>同一區的地標和里長全部買下</b>，那一區的地標（還沒蓋總部時）過路費加倍。</p>
+      <p>台北市有 ${DISTRICTS.length} 個行政區，地圖上每一區的第一格旁邊有<b>行政區看板</b>（寫著這區有幾格）。把<b>同一區的地標和里長全部拿下</b>：</p>
+      <ul>
+        <li>那一區的地標（還沒蓋總部時）過路費加倍。</li>
+        <li><b>整區加成</b>：2 格以上的區，每回合再 + ${R.districtBonus} 位支持者。</li>
+      </ul>
     </section>
 
     <section>
