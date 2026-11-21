@@ -42,10 +42,14 @@ class GameScene extends Phaser.Scene {
     this.tileState = TILES.map(() => ({ owner: null, level: 0, since: 0, bonus: 0, favor: [0, 0, 0, 0], landmark: null }));
     this.generals = new GeneralSystem(this);
     this.players = [];
+    this.cast = normalizeCast(data.cast);
     for (let i = 0; i < this.playerCount; i++) {
+      const info = castInfo(this.cast[i]);
       this.players.push({
         id: i,
         ...CHARACTERS[i],
+        name: info.name,
+        genId: info.genId, // 選戰將當候選人：這位戰將不能招募
         money: GAME_RULES.startMoney,
         fans: GAME_RULES.startFans,
         pos: i * GAME_RULES.startSpread, // 起點錯開，先擲骰的人才不會太有利
@@ -59,6 +63,7 @@ class GameScene extends Phaser.Scene {
         human: this.mode === 'hotseat' || i === 0,
       });
     }
+    this.generals.retire(this.players.map((p) => p.genId).filter((x) => x !== undefined));
     this.chanceDeck = [];
     this.fateDeck = [];
     this.history = []; // 民調紀錄：[{ round, who, fans: [每位玩家的支持者] }]，結算畫面的趨勢報告用
@@ -69,6 +74,7 @@ class GameScene extends Phaser.Scene {
   }
 
   create() {
+    applyCastTextures(this, this.cast);
     this.cameras.main.setBackgroundColor(0x4a7fb5);
     Music.want('game');
     this.buildBoard();

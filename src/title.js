@@ -9,6 +9,7 @@ class TitleScene extends Phaser.Scene {
     this.opts = { playerCount: 4, mode: 'cpu', rounds: 30, quiz: false, quizLevel: 'junior' };
     try { Object.assign(this.opts, JSON.parse(localStorage.getItem('options') || '{}')); } catch (e) { /* 讀不到就用預設 */ }
     if (!ROUND_OPTIONS.includes(this.opts.rounds)) this.opts.rounds = 30;
+    this.opts.cast = normalizeCast(this.opts.cast);
     this.rows = [];
   }
 
@@ -16,7 +17,7 @@ class TitleScene extends Phaser.Scene {
     // AI 畫的建築圖（登記在 data.js 的 BUILDING_IMAGES）
     const v = `?v=${window.GAME_VERSION || ''}`; // 版本號：更新後瀏覽器會重新下載圖片
     for (const [key, path] of Object.entries(BUILDING_IMAGES)) this.load.image(`bld_${key}`, path + v);
-    CHARACTERS.forEach((ch, i) => { if (ch.image) this.load.image(`charimg${i}`, ch.image + v); });
+    CHARACTERS.forEach((ch, i) => { if (ch.image) this.load.image(`charsrc${i}`, ch.image + v); });
     GENERALS.forEach((g) => this.load.image(`genimg${g.id}`, g.image + v));
     this.load.on('loaderror', (file) => console.warn('圖片載入失敗：', file.src));
   }
@@ -48,13 +49,9 @@ class TitleScene extends Phaser.Scene {
     this.add.text(W / 2, L.t2, '大富翁', { fontFamily: FONT, fontSize: L.size, color: '#ff004d', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
     this.add.text(W / 2, L.sub, '～ 買下台北，贏得選戰 ～', { fontFamily: FONT, fontSize: '28px', color: '#fff1e8' }).setOrigin(0.5);
 
-    // 角色展示
-    CHARACTERS.forEach((ch, i) => {
-      const x = W / 2 - 240 + i * 160;
-      const img = addCharacter(this, x, L.chars, i, 110);
-      this.tweens.add({ targets: img, y: L.chars - 10, duration: 400 + i * 60, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3] });
-      this.add.text(x, L.names, ch.name, { fontFamily: FONT, fontSize: '24px', color: ch.color, stroke: '#000', strokeThickness: 6 }).setOrigin(0.5);
-    });
+    // 角色展示：點一下可以換角色
+    this.L = L;
+    this.castObjs = [];
 
     // 選項：直版是一欄五排；橫版是左邊三排（人數、玩法、回合）、右邊兩排（英文挑戰、程度）
     const ry = L.rowY;
@@ -98,7 +95,64 @@ class TitleScene extends Phaser.Scene {
     this.rows.push({ key, items, btns, title, enabled });
   }
 
+  // 角色展示（人數改變時重畫）
+  drawCast() {
+    const L = this.L;
+    this.castObjs.forEach((o) => o.destroy());
+    this.castObjs = [];
+    applyCastTextures(this, this.opts.cast);
+    const n = this.opts.playerCount;
+    for (let i = 0; i < n; i++) {
+      const x = W / 2 + (i - (n - 1) / 2) * 160;
+      const info = castInfo(this.opts.cast[i]);
+      const who = this.opts.mode === 'cpu' ? (i === 0 ? '你' : '電腦') : `玩家${i + 1}`;
+      const tag = this.add.text(x, L.names + 30, `${who}・點我換`, { fontFamily: FONT, fontSize: '16px', color: '#000000', backgroundColor: CHARACTERS[i].color, padding: { x: 6, y: 2 } }).setOrigin(0.5)
+        .setInteractive({ useHandCursor: true }).on('pointerup', () => this.pickCast(i));
+      const img = addCharacter(this, x, L.chars, i, 110);
+      img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.pickCast(i));
+      this.tweens.add({ targets: img, y: L.chars - 10, duration: 400 + i * 60, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3] });
+      const name = this.add.text(x, L.names, info.name, { fontFamily: FONT, fontSize: '24px', color: CHARACTERS[i].color, stroke: '#000', strokeThickness: 6 }).setOrigin(0.5)
+        .setInteractive({ useHandCursor: true }).on('pointerup', () => this.pickCast(i));
+      this.castObjs.push(tag, img, name);
+    }
+  }
+
+  // 選角色視窗：4 位政治人物＋12 位戰將
+  async pickCast(seat) {
+    if (document.querySelector('.gv-modal')) return;
+    Sfx.click();
+    const cast = this.opts.cast;
+    const v = window.GAME_VERSION || '';
+    const n = this.opts.playerCount;
+    const who = (i) => (this.opts.mode === 'cpu' ? (i === 0 ? '你' : `電腦${i}`) : `玩家${i + 1}`);
+    const card = (o) => {
+      const at = cast.indexOf(o.key);
+      const mine = at === seat;
+      const used = at >= 0 && at < n && !mine;
+      return `<button type="button" class="cs-pick${mine ? ' cs-on' : ''}" data-v="${o.key}">
+        <span class="cs-img" style="background-image:url('${o.image}?v=${v}')"></span>
+        <b>${escapeHTML(o.name)}</b><small>${escapeHTML(o.title)}</small>
+        ${mine ? '<em>目前</em>' : used ? `<em>${who(at)}在用・會交換</em>` : ''}
+      </button>`;
+    };
+    const opts = castOptions();
+    const pick = await gvModal({
+      title: `${who(seat)}要當誰？`, color: CHARACTERS[seat].color,
+      body: `<p class="gv-tip">選戰將當候選人的話，那位戰將就不會出現在招募站。</p>
+        <h4>政治人物</h4><div class="cs-grid">${opts.filter((o) => !o.genId && o.genId !== 0).map(card).join('')}</div>
+        <h4>戰將</h4><div class="cs-grid">${opts.filter((o) => o.genId !== undefined).map(card).join('')}</div>
+        <button type="button" class="gv-skip" data-v="back">取消</button>`,
+    });
+    if (!pick || pick === 'back') return;
+    const other = cast.indexOf(pick);
+    if (other >= 0) cast[other] = cast[seat]; // 別人在用：交換
+    cast[seat] = pick;
+    try { localStorage.setItem('options', JSON.stringify(this.opts)); } catch (e) { /* 存不了沒關係 */ }
+    this.drawCast();
+  }
+
   refresh() {
+    this.drawCast();
     for (const row of this.rows) {
       const on = row.enabled();
       row.title.setAlpha(on ? 1 : 0.4);
