@@ -2,21 +2,22 @@
 // 想調整價錢、換角色名字、加新卡片，改這個檔案就好，不用動遊戲程式。
 
 const GAME_RULES = {
-  startMoney: 1500,   // 每人一開始的錢
-  passGoBonus: 200,   // 經過起點拿的錢
+  startMoney: 2000,   // 每人一開始的錢
+  passGoBonus: 300,   // 經過起點拿的錢
   maxRounds: 20,      // 第幾回合結束就是「投票日」，比誰的支持者最多
   startFans: 1000,    // 每人一開始的支持者
-  maxLevel: 3,        // 地標的競選總部最多蓋幾層
-  rentMultiplier: [1, 4, 10, 20], // 地標 0~3 層時，過路費是基本過路費的幾倍
+  maxLevel: 3,        // 空地最多蓋到第幾階段（3 = 地標完工）
+  rentMultiplier: [1, 3, 7, 14], // 空地 0 → 工地 1 → 小建築 2 → 地標 3：過路費是基本過路費的幾倍
+  dice: 2,            // 一次擲幾顆骰子（地圖變大了，擲兩顆走比較快）
   towFine: 100,       // 拖吊場罰款
   startSpread: 2,     // 起點錯開：第 2 位玩家從第 2 格出發、第 3 位第 4 格…（先擲骰的人才不會太有利）
 
   // ---- 地標（賺錢為主，也帶來一些支持者）----
   buyFansRate: 0.5,     // 買下地標：支持者 + 價錢 × 0.5
-  buildFansRate: 0.5,   // 蓋一層競選總部：支持者 + 價錢 × 0.5
+  buildFansRate: 0.5,   // 每蓋一個階段：支持者 + 價錢 × 0.5
   landmarkFansRate: 0.15, // 【A】每回合開始：每個地標帶來 價錢 × 0.15 ×（總部層數 + 1）位支持者
   landmarkStealRate: 0.2, // 【B】對手踩到你的地標：倒戈 價錢 × 0.2 ×（總部層數 + 1）位支持者
-  landmarkUpkeepRate: 0.02, // 地標租金：每回合開始付 價錢 × 0.02 ×（總部層數 + 1）
+  landmarkUpkeepRate: 0.01, // 地標租金：每回合開始付 價錢 × 0.01 ×（總部層數 + 1）
 
   // ---- 里長（便宜、過路費低，但帶來比較多支持者）----
   chiefBuyFans: 200,    // 拉攏里長：支持者 + 200
@@ -50,62 +51,224 @@ const GAME_RULES = {
 // 首頁可以選的回合數
 const ROUND_OPTIONS = [10, 20, 30];
 
-// 台北市 12 個行政區（地標和里長都屬於某一區；同一區全部買下，地標空地過路費加倍）
-const DISTRICTS = ['中正區', '大安區', '文山區', '信義區', '南港區', '內湖區', '松山區', '中山區', '士林區', '北投區', '大同區', '萬華區'];
+// 台北市 12 個行政區（照路線順序）
+const DISTRICTS = ['中正區', '萬華區', '大同區', '中山區', '士林區', '北投區', '內湖區', '松山區', '南港區', '信義區', '文山區', '大安區'];
 
-// 地圖路線：台北市的形狀（北邊是士林、北投，東邊是內湖、南港，南邊是文山，西邊是萬華、大同）。
-// 每個點是一個轉彎處 [col, row]，路線會照順序一格一格連起來，最後回到第一個點。
-// 路線總長度要剛好等於 TILES 的格數（36 格）。
+// 地圖形狀：照真實台北市行政區圖做的（中間的區放大一點，格子才夠）。
+// 每個字是一格陸地，'.' 是河水。(col, row) 斜 45 度畫在畫面上。
+const MAP_LAND = [
+  'BBB..........................',
+  'BBBBT........................',
+  '.BBBTTTTT....................',
+  'BBBBTTTTTT...................',
+  'BBBBTTTTTTTN.................',
+  'BBBBTTTTTTNNNN...............',
+  'BBBBTTTTTNNNNNNN.............',
+  'BBBBBTTTTSNNNNNNN............',
+  'BBBBBTTTTSSNNNNNNN...........',
+  '.BBBBTTTSSSSOOONNNN..........',
+  '.BBBTTTTSSSSSOOONNNG.........',
+  '.TTTTTTTSSSSSSOOONGGXXX......',
+  '..TTTTTTSSSSSSSOOOXGGGGG.....',
+  '...TTTTDDSSSSSSSOOXXGGGG.....',
+  '...TTTTDDTSSSSSSSOAXXGGG.....',
+  '.......TTTTSSSSSSSAAXXGGG....',
+  '........TTTSSSSSSSAAAXXGG....',
+  '.........TTDSSSSSAAAAXXXW....',
+  '.........TTDZZZZZZAAAAXWWW...',
+  '..........MMZZZZZZAAAAAWWWW..',
+  '..........MMMZZZZZAAAAAAWWWW.',
+  '...........MMMMZZZAAAAAWWWWW.',
+  '............MMMMZZZAAAAWWWWW.',
+  '.............MMMMZZAAAAWWWWW.',
+  '..............MMMMMAAAWWWWWW.',
+  '................MMMAAAWWWWW..',
+  '..................MAA........',
+];
+
+// 路線：每個點是一個轉彎處 [col, row]，照順序一格一格連起來，最後回到第一個點。
+// 路線總長度要剛好等於 TILES 的格數（76 格）。
 const MAP_ROUTE = [
-  [2, 7], [2, 9], [5, 9], [5, 11], [8, 11], [8, 9], [10, 9],
-  [10, 5], [6, 5], [6, 1], [3, 1], [3, 4], [2, 4],
+  [16, 21], [16, 22], [14, 22], [14, 20], [12, 20], [12, 16], [10, 16], [10, 12],
+  [11, 12], [11, 9], [8, 9], [8, 8], [5, 8], [5, 5], [12, 5], [12, 6],
+  [14, 6], [14, 9], [16, 9], [16, 12], [20, 12], [20, 11], [21, 11], [21, 15],
+  [23, 15], [23, 21], [22, 21], [22, 22], [20, 22], [20, 21],
 ];
 
-// 地圖 36 格，從「起點」（台北車站旁）出發。
-// type: go 起點 / property 地標 / chief 里長 / chance 機會 / fate 命運 / talent 戰將招募站
-//       / jam 塞車 / mrt 捷運站 / tow 拖吊場
+// 地圖 76 格，從「起點」（中正區）出發，依序經過 12 個區。
+// type: go 起點 / property 空地（可以慢慢蓋成地標）/ chief 里長 / chance 機會 / fate 命運
+//       / talent 戰將招募站 / jam 塞車 / mrt 捷運站 / tow 拖吊場
 const TILES = [
-  { type: 'go',       name: '起點',         icon: 'go' },
-  { type: 'property', name: '台北車站',     icon: 'station',      price: 100, district: '中正區' },
-  { type: 'chief',    name: '中正區里長',   icon: 'chief',        price: 120, district: '中正區' },
-  { type: 'property', name: '總統府',       icon: 'presidential', price: 300, district: '中正區' },
-  { type: 'chance',   name: '機會',         icon: 'chance' },
-  { type: 'property', name: '中正紀念堂',   icon: 'cks',          price: 240, district: '中正區' },
-  { type: 'chief',    name: '大安區里長',   icon: 'chief',        price: 140, district: '大安區' },
-  { type: 'fate',     name: '命運',         icon: 'ballot' },
-  { type: 'chief',    name: '文山區里長',   icon: 'chief',        price: 90,  district: '文山區' },
-  { type: 'jam',      name: '塞車',         icon: 'jam' },
-  { type: 'property', name: '國父紀念館',   icon: 'sunyatsen',    price: 220, district: '信義區' },
-  { type: 'chief',    name: '信義區里長',   icon: 'chief',        price: 140, district: '信義區' },
-  { type: 'property', name: '台北101',      icon: 'taipei101',    price: 350, district: '信義區' },
-  { type: 'talent',   name: '戰將招募站',   icon: 'talent' },
-  { type: 'chief',    name: '南港區里長',   icon: 'chief',        price: 90,  district: '南港區' },
-  { type: 'chance',   name: '機會',         icon: 'chance' },
-  { type: 'chief',    name: '內湖區里長',   icon: 'chief',        price: 110, district: '內湖區' },
-  { type: 'fate',     name: '命運',         icon: 'ballot' },
-  { type: 'mrt',      name: '捷運站',       icon: 'mrt' },
-  { type: 'property', name: '小巨蛋',       icon: 'arena',        price: 200, district: '松山區' },
-  { type: 'chief',    name: '松山區里長',   icon: 'chief',        price: 110, district: '松山區' },
-  { type: 'property', name: '圓山飯店',     icon: 'grandhotel',   price: 180, district: '中山區' },
-  { type: 'chief',    name: '中山區里長',   icon: 'chief',        price: 120, district: '中山區' },
-  { type: 'chance',   name: '機會',         icon: 'chance' },
-  { type: 'property', name: '故宮',         icon: 'palace',       price: 160, district: '士林區' },
-  { type: 'property', name: '士林夜市',     icon: 'nightmarket',  price: 140, district: '士林區' },
-  { type: 'chief',    name: '士林區里長',   icon: 'chief',        price: 100, district: '士林區' },
-  { type: 'tow',      name: '拖吊場',       icon: 'siren' },
-  { type: 'property', name: '北投溫泉',     icon: 'beitou',       price: 120, district: '北投區' },
-  { type: 'chief',    name: '北投區里長',   icon: 'chief',        price: 90,  district: '北投區' },
-  { type: 'talent',   name: '戰將招募站',   icon: 'talent' },
-  { type: 'chief',    name: '大同區里長',   icon: 'chief',        price: 80,  district: '大同區' },
-  { type: 'fate',     name: '命運',         icon: 'ballot' },
-  { type: 'property', name: '西門紅樓',     icon: 'redhouse',     price: 60,  district: '萬華區' },
-  { type: 'property', name: '龍山寺',       icon: 'longshan',     price: 60,  district: '萬華區' },
-  { type: 'chief',    name: '萬華區里長',   icon: 'chief',        price: 80,  district: '萬華區' },
+  { type: 'go', name: '起點', icon: 'go' }, // 0
+  // ---- 中正區 ----
+  { type: 'property', name: '中正空地', price: 220, district: '中正區' }, // 1
+  { type: 'chief', name: '中正區里長', icon: 'chief', price: 130, district: '中正區' }, // 2
+  { type: 'property', name: '中正空地', price: 220, district: '中正區' }, // 3
+  { type: 'property', name: '中正空地', price: 220, district: '中正區' }, // 4
+  // ---- 萬華區 ----
+  { type: 'property', name: '萬華空地', price: 100, district: '萬華區' }, // 5
+  { type: 'chance', name: '機會', icon: 'chance' }, // 6
+  { type: 'chief', name: '萬華區里長', icon: 'chief', price: 80, district: '萬華區' }, // 7
+  { type: 'property', name: '萬華空地', price: 100, district: '萬華區' }, // 8
+  { type: 'jam', name: '塞車', icon: 'jam' }, // 9
+  { type: 'property', name: '萬華空地', price: 100, district: '萬華區' }, // 10
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 11
+  // ---- 大同區 ----
+  { type: 'property', name: '大同空地', price: 110, district: '大同區' }, // 12
+  { type: 'talent', name: '戰將招募站', icon: 'talent' }, // 13
+  { type: 'chief', name: '大同區里長', icon: 'chief', price: 80, district: '大同區' }, // 14
+  { type: 'property', name: '大同空地', price: 110, district: '大同區' }, // 15
+  { type: 'chance', name: '機會', icon: 'chance' }, // 16
+  { type: 'property', name: '大同空地', price: 110, district: '大同區' }, // 17
+  // ---- 中山區 ----
+  { type: 'property', name: '中山空地', price: 200, district: '中山區' }, // 18
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 19
+  { type: 'chief', name: '中山區里長', icon: 'chief', price: 120, district: '中山區' }, // 20
+  { type: 'property', name: '中山空地', price: 200, district: '中山區' }, // 21
+  { type: 'mrt', name: '捷運站', icon: 'mrt' }, // 22
+  { type: 'property', name: '中山空地', price: 200, district: '中山區' }, // 23
+  // ---- 士林區 ----
+  { type: 'property', name: '士林空地', price: 160, district: '士林區' }, // 24
+  { type: 'chance', name: '機會', icon: 'chance' }, // 25
+  { type: 'chief', name: '士林區里長', icon: 'chief', price: 100, district: '士林區' }, // 26
+  { type: 'property', name: '士林空地', price: 160, district: '士林區' }, // 27
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 28
+  { type: 'property', name: '士林空地', price: 160, district: '士林區' }, // 29
+  { type: 'chance', name: '機會', icon: 'chance' }, // 30
+  // ---- 北投區 ----
+  { type: 'property', name: '北投空地', price: 120, district: '北投區' }, // 31
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 32
+  { type: 'chief', name: '北投區里長', icon: 'chief', price: 90, district: '北投區' }, // 33
+  { type: 'property', name: '北投空地', price: 120, district: '北投區' }, // 34
+  { type: 'talent', name: '戰將招募站', icon: 'talent' }, // 35
+  { type: 'property', name: '北投空地', price: 120, district: '北投區' }, // 36
+  { type: 'chance', name: '機會', icon: 'chance' }, // 37
+  // ---- 內湖區 ----
+  { type: 'property', name: '內湖空地', price: 180, district: '內湖區' }, // 38
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 39
+  { type: 'chief', name: '內湖區里長', icon: 'chief', price: 110, district: '內湖區' }, // 40
+  { type: 'property', name: '內湖空地', price: 180, district: '內湖區' }, // 41
+  { type: 'tow', name: '拖吊場', icon: 'siren' }, // 42
+  { type: 'property', name: '內湖空地', price: 180, district: '內湖區' }, // 43
+  { type: 'chance', name: '機會', icon: 'chance' }, // 44
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 45
+  // ---- 松山區 ----
+  { type: 'property', name: '松山空地', price: 200, district: '松山區' }, // 46
+  { type: 'mrt', name: '捷運站', icon: 'mrt' }, // 47
+  { type: 'chief', name: '松山區里長', icon: 'chief', price: 120, district: '松山區' }, // 48
+  { type: 'property', name: '松山空地', price: 200, district: '松山區' }, // 49
+  { type: 'chance', name: '機會', icon: 'chance' }, // 50
+  { type: 'property', name: '松山空地', price: 200, district: '松山區' }, // 51
+  // ---- 南港區 ----
+  { type: 'property', name: '南港空地', price: 160, district: '南港區' }, // 52
+  { type: 'chief', name: '南港區里長', icon: 'chief', price: 100, district: '南港區' }, // 53
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 54
+  { type: 'property', name: '南港空地', price: 160, district: '南港區' }, // 55
+  { type: 'talent', name: '戰將招募站', icon: 'talent' }, // 56
+  { type: 'property', name: '南港空地', price: 160, district: '南港區' }, // 57
+  // ---- 信義區 ----
+  { type: 'property', name: '信義空地', price: 300, district: '信義區' }, // 58
+  { type: 'chance', name: '機會', icon: 'chance' }, // 59
+  { type: 'chief', name: '信義區里長', icon: 'chief', price: 140, district: '信義區' }, // 60
+  { type: 'property', name: '信義空地', price: 300, district: '信義區' }, // 61
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 62
+  { type: 'property', name: '信義空地', price: 300, district: '信義區' }, // 63
+  // ---- 文山區 ----
+  { type: 'property', name: '文山空地', price: 120, district: '文山區' }, // 64
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 65
+  { type: 'chief', name: '文山區里長', icon: 'chief', price: 90, district: '文山區' }, // 66
+  { type: 'property', name: '文山空地', price: 120, district: '文山區' }, // 67
+  { type: 'chance', name: '機會', icon: 'chance' }, // 68
+  { type: 'property', name: '文山空地', price: 120, district: '文山區' }, // 69
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 70
+  // ---- 大安區 ----
+  { type: 'property', name: '大安空地', price: 260, district: '大安區' }, // 71
+  { type: 'chief', name: '大安區里長', icon: 'chief', price: 140, district: '大安區' }, // 72
+  { type: 'property', name: '大安空地', price: 260, district: '大安區' }, // 73
+  { type: 'chance', name: '機會', icon: 'chance' }, // 74
+  { type: 'property', name: '大安空地', price: 260, district: '大安區' }, // 75
 ];
 
-// 加入「英文挑戰」時，把下面這幾格換成英文挑戰格（散在地圖的南、東、西北）
+// =====================================================================
+// 地標：空地慢慢蓋 → 工地 → 小建築 → 地標完工。
+// 完工時，從那一區的地標裡「隨機」抽一個（同一張地圖不會重複），每個地標有特殊效果。
+// =====================================================================
+const BUILD_STAGES = ['空地', '工地', '小建築', '地標'];
+
+const LANDMARK_EFFECTS = {
+  tourist: { name: '觀光人潮', text: '每回合支持者再 +50' },
+  market:  { name: '夜市商圈', text: '過路費 ×1.5' },
+  temple:  { name: '香火鼎盛', text: '對手踩到時倒戈 ×2' },
+  gov:     { name: '政府機關', text: '同區里長免經營費、穩固度 +2' },
+  culture: { name: '文化地標', text: '這一區出任務效果 ×1.5' },
+  hub:     { name: '交通樞紐', text: '每回合 +$50' },
+};
+
+const LANDMARKS = {
+  中正區: [
+    { key: 'station', name: '台北車站', effect: 'hub' },
+    { key: 'presidential', name: '總統府', effect: 'gov' },
+    { key: 'cks', name: '中正紀念堂', effect: 'culture' },
+  ],
+  萬華區: [
+    { key: 'longshan', name: '龍山寺', effect: 'temple' },
+    { key: 'redhouse', name: '西門紅樓', effect: 'market' },
+    { key: 'bopiliao', name: '剝皮寮', effect: 'culture' },
+  ],
+  大同區: [
+    { key: 'dihua', name: '迪化街', effect: 'market' },
+    { key: 'xiahai', name: '霞海城隍廟', effect: 'temple' },
+    { key: 'dadaocheng', name: '大稻埕碼頭', effect: 'tourist' },
+  ],
+  中山區: [
+    { key: 'grandhotel', name: '圓山大飯店', effect: 'tourist' },
+    { key: 'xingtian', name: '行天宮', effect: 'temple' },
+    { key: 'artmuseum', name: '台北市立美術館', effect: 'culture' },
+  ],
+  士林區: [
+    { key: 'palace', name: '故宮博物院', effect: 'culture' },
+    { key: 'nightmarket', name: '士林夜市', effect: 'market' },
+    { key: 'shilinresidence', name: '士林官邸', effect: 'gov' },
+  ],
+  北投區: [
+    { key: 'beitou', name: '北投溫泉博物館', effect: 'tourist' },
+    { key: 'beitoulibrary', name: '北投圖書館', effect: 'culture' },
+    { key: 'guandu', name: '關渡宮', effect: 'temple' },
+  ],
+  內湖區: [
+    { key: 'ferriswheel', name: '美麗華摩天輪', effect: 'tourist' },
+    { key: 'sciencepark', name: '內湖科學園區', effect: 'hub' },
+    { key: 'bishan', name: '碧山巖', effect: 'temple' },
+  ],
+  松山區: [
+    { key: 'arena', name: '台北小巨蛋', effect: 'tourist' },
+    { key: 'raohe', name: '饒河夜市', effect: 'market' },
+    { key: 'airport', name: '松山機場', effect: 'hub' },
+  ],
+  南港區: [
+    { key: 'nangangexpo', name: '南港展覽館', effect: 'tourist' },
+    { key: 'sinica', name: '中央研究院', effect: 'culture' },
+    { key: 'nangangstation', name: '南港車站', effect: 'hub' },
+  ],
+  信義區: [
+    { key: 'taipei101', name: '台北101', effect: 'tourist' },
+    { key: 'sunyatsen', name: '國父紀念館', effect: 'culture' },
+    { key: 'cityhall', name: '台北市政府', effect: 'gov' },
+  ],
+  文山區: [
+    { key: 'zoo', name: '台北市立動物園', effect: 'tourist' },
+    { key: 'maokong', name: '貓空纜車', effect: 'hub' },
+    { key: 'nccu', name: '政治大學', effect: 'culture' },
+  ],
+  大安區: [
+    { key: 'daanpark', name: '大安森林公園', effect: 'tourist' },
+    { key: 'ntu', name: '台灣大學', effect: 'culture' },
+    { key: 'shida', name: '師大夜市', effect: 'market' },
+  ],
+};
+
 const QUIZ_TILE = { type: 'quiz', name: '英文挑戰', icon: 'quiz' };
-const QUIZ_TILE_SLOTS = [7, 15, 32]; // 原本是：命運、機會、命運（兩個戰將招募站都保留）
+const QUIZ_TILE_SLOTS = [16, 39, 65]; // 原本是：機會、命運、命運
 const BASE_TILES = TILES.map((t) => ({ ...t }));
 
 // 開新遊戲時依首頁的選項重新排地圖格子（TILES 會被改成這一場用的版本）
@@ -249,6 +412,32 @@ const FATE_CARDS = [
 // key 要跟上面 TILES 的 icon 名稱一樣；沒登記的地標會用程式畫的小像素圖代替。
 // 圖片建議：透明背景、建築底部置中、寬度約 256 像素。
 const BUILDING_IMAGES = {
+  site: 'assets/buildings/site.png',       // 蓋到一半：工地
+  office: 'assets/buildings/office.png',   // 小建築
+  bopiliao: 'assets/buildings/bopiliao.png',
+  dihua: 'assets/buildings/dihua.png',
+  xiahai: 'assets/buildings/xiahai.png',
+  dadaocheng: 'assets/buildings/dadaocheng.png',
+  xingtian: 'assets/buildings/xingtian.png',
+  artmuseum: 'assets/buildings/artmuseum.png',
+  raohe: 'assets/buildings/raohe.png',
+  airport: 'assets/buildings/airport.png',
+  cityhall: 'assets/buildings/cityhall.png',
+  daanpark: 'assets/buildings/daanpark.png',
+  ntu: 'assets/buildings/ntu.png',
+  shida: 'assets/buildings/shida.png',
+  zoo: 'assets/buildings/zoo.png',
+  maokong: 'assets/buildings/maokong.png',
+  nccu: 'assets/buildings/nccu.png',
+  nangangexpo: 'assets/buildings/nangangexpo.png',
+  sinica: 'assets/buildings/sinica.png',
+  nangangstation: 'assets/buildings/nangangstation.png',
+  ferriswheel: 'assets/buildings/ferriswheel.png',
+  sciencepark: 'assets/buildings/sciencepark.png',
+  bishan: 'assets/buildings/bishan.png',
+  shilinresidence: 'assets/buildings/shilinresidence.png',
+  beitoulibrary: 'assets/buildings/beitoulibrary.png',
+  guandu: 'assets/buildings/guandu.png',
   longshan: 'assets/buildings/longshan.png',
   redhouse: 'assets/buildings/redhouse.png',
   station: 'assets/buildings/station.png',

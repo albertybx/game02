@@ -273,7 +273,7 @@ class HudScene extends Phaser.Scene {
       property: `${t.district}${dn > 1 ? `（${dn} 格）` : ''}・地標 $${t.price}`, chief: `${t.district}${dn > 1 ? `（${dn} 格）` : ''}・里長 $${t.price}`,
     }[t.type] || '';
     const owner = st && st.owner !== null ? `・${this.gs.players[st.owner].name}的地盤` : '';
-    this.plateName.setText(t.name);
+    this.plateName.setText(this.gs.tileName(i));
     this.plateSub.setText(kind + owner);
     const w = Math.max(this.plateName.width, this.plateSub.width) + 32;
     this.plateBg.setSize(w, this.plateH).setStrokeStyle(4, hex(p.color));
@@ -291,8 +291,9 @@ class HudScene extends Phaser.Scene {
     this.add.rectangle(x0, y0, W - x0, 4, 0x000000).setOrigin(0);
 
     const diceX = x0 + 84;
-    this.add.rectangle(diceX, midY, 104, 104, 0x29366f).setStrokeStyle(4, 0x000000);
-    this.dice = this.add.image(diceX, midY - 4, 'dice1').setScale(5);
+    this.add.rectangle(diceX, midY, 120, 104, 0x29366f).setStrokeStyle(4, 0x000000);
+    // 兩顆骰子
+    this.dice = [this.add.image(diceX - 26, midY - 4, 'dice1').setScale(3.4), this.add.image(diceX + 26, midY - 4, 'dice1').setScale(3.4)];
 
     const mx = x0 + 158;
     const mw = W - mx - 14;
@@ -318,15 +319,15 @@ class HudScene extends Phaser.Scene {
         if (face === lastFace) return;
         lastFace = face;
         const n = Phaser.Math.Between(1, 6);
-        this.dice.setTexture(`dice${n}`).setAngle(Phaser.Math.Between(-20, 20));
+        this.dice.forEach((d) => d.setTexture(`dice${Phaser.Math.Between(1, 6)}`).setAngle(Phaser.Math.Between(-20, 20)));
         Sfx.beep(300 + n * 60, 0.03);
       },
     }));
-    const roll = Phaser.Math.Between(1, 6);
-    this.dice.setTexture(`dice${roll}`).setAngle(0);
+    const faces = this.dice.map(() => Phaser.Math.Between(1, 6));
+    this.dice.forEach((d, k) => d.setTexture(`dice${faces[k]}`).setAngle(0).setVisible(k < GAME_RULES.dice));
     Sfx.beep(880, 0.08);
-    await new Promise((res) => this.tweens.add({ targets: this.dice, scale: 6.5, duration: 100, yoyo: true, onComplete: res }));
-    return roll;
+    await new Promise((res) => this.tweens.add({ targets: this.dice, scale: 4.2, duration: 100, yoyo: true, onComplete: res }));
+    return faces.slice(0, GAME_RULES.dice).reduce((a, b) => a + b, 0);
   }
 
   // 顯示按鈕，等玩家選；電腦玩家會自動選 auto

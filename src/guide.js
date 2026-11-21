@@ -42,18 +42,25 @@ function guideHTML() {
       <ol>
         <li>出任務的戰將回來，帶回支持者。</li>
         <li>你擁有的<b>地標和里長</b>帶來支持者；同時付<b>地標租金</b>（每回合）和<b>里長經營費</b>（每 ${R.chiefFeeEvery} 回合）。付不出來就會失去那一格。</li>
-        <li>擲骰子前可以按「<b>行動</b>」（見下面），然後擲骰子往前走。</li>
+        <li>擲骰子前可以按「<b>行動</b>」（見下面），然後擲 ${R.dice} 顆骰子往前走。</li>
         <li>停在哪一格，就發生那一格的事。</li>
       </ol>
-      <p>大家的起點是錯開的（每人往前 ${R.startSpread} 格），先擲骰子的人才不會太佔便宜。</p>
+      <p>大家的起點是錯開的（每人往前 ${R.startSpread} 格），先擲骰子的人才不會太佔便宜。經過起點領 $${R.passGoBonus}。</p>
+    </section>
+
+    <section>
+      <h3>地標的特殊效果</h3>
+      <ul>${Object.values(LANDMARK_EFFECTS).map((e) => `<li><b>${e.name}</b>：${e.text}</li>`).join('')}</ul>
+      <p>各區的地標：${DISTRICTS.map((d) => `${d}（${LANDMARKS[d].map((l) => `${l.name}・${LANDMARK_EFFECTS[l.effect].name}`).join('、')}）`).join('；')}</p>
     </section>
 
     <section>
       <h3>擲骰子前的「行動」</h3>
       <ul>
+        <li><b>蓋房子</b>：把自己的一塊空地往上蓋一個階段。</li>
         <li><b>造勢晚會</b>：花 $${R.rallyCost}，支持者 + ${R.rallyFans}。每場最多 ${R.rallyMax} 次。</li>
         <li><b>遠端派戰將出任務</b>：不用走到里長格也能派，但效果 ×${GR.remoteRate}。</li>
-        <li><b>派戰將去拉攏里長</b>：你拜訪過一次的里長，可以派戰將去完成拉攏（${GR.wooTurns} 回合）。</li>
+        <li><b>派戰將去拉攏里長</b>：還沒人拉攏的里長，派戰將去拉攏。拜訪過一次的只付一半、${GR.wooTurns} 回合；沒拜訪過的付全額、${GR.wooTurns + 1} 回合。</li>
         <li><b>辯論挑戰</b>：下半場落後第一名 ${R.debateGap} 位以上，可以花 $${R.debateCost} 向第一名下戰帖。贏了：第一名有 ${R.debateFans} 位支持者倒戈給你；輸了：你有 ${R.debateLoseFans} 位倒戈給他。每人每場一次。</li>
       </ul>
     </section>
@@ -70,18 +77,19 @@ function guideHTML() {
 
     <section>
       <h3>格子的效果</h3>
-      ${tile('taipei101', `地標（${props.length} 個，${range(props)}）`, `
-        <p>比較貴，主要用來<b>賺錢</b>。</p>
+      ${tile('site', `空地 → 地標（${props.length} 塊，${range(props)}）`, `
+        <p>每一區有 3 塊空地。買下後可以<b>慢慢蓋</b>：空地 → 工地 → 小建築 → <b>地標</b>。</p>
         <ul>
           <li>買下：支持者 + 價錢的 ${pct(R.buyFansRate)}。</li>
-          <li>每回合：帶來 價錢 × ${pct(R.landmarkFansRate)} ×（總部層數 + 1）位支持者，要付租金 價錢 × ${pct(R.landmarkUpkeepRate)} ×（總部層數 + 1）。</li>
-          <li>再走到自己的地標，可以花價錢的一半蓋<b>競選總部</b>（最多 ${R.maxLevel} 層），支持者 + 價錢的 ${pct(R.buildFansRate)}，過路費變成 ${R.rentMultiplier.slice(1).join(' / ')} 倍。</li>
-          <li>對手踩到：付過路費（價錢的 10% × 倍數），而且有 價錢 × ${pct(R.landmarkStealRate)} ×（層數 + 1）位支持者<b>倒戈</b>到你這邊。</li>
+          <li>蓋下一階段：花價錢的一半，支持者 + 價錢的 ${pct(R.buildFansRate)}。可以走到自己的空地時蓋，也可以在擲骰子前按「行動 → 蓋房子」（每回合一次）。</li>
+          <li>蓋到第 3 階段就完工，<b>隨機</b>變成這一區的地標（例如信義區：台北101、國父紀念館、台北市政府），每個地標有<b>特殊效果</b>（見下面）。</li>
+          <li>每回合：帶來 價錢 × ${pct(R.landmarkFansRate)} ×（階段 + 1）位支持者，要付租金 價錢 × ${pct(R.landmarkUpkeepRate)} ×（階段 + 1）。</li>
+          <li>對手踩到：付過路費（價錢的 10% × ${R.rentMultiplier.join(' / ')} 倍），而且有 價錢 × ${pct(R.landmarkStealRate)} ×（階段 + 1）位支持者<b>倒戈</b>到你這邊。</li>
         </ul>`)}
       ${tile('chief', `里長（${chiefs.length} 區，${range(chiefs)}）`, `
         <p>比較便宜，主要用來<b>拉支持者</b>。</p>
         <ul>
-          <li>要<b>拜訪 ${R.chiefVisits} 次</b>才拉攏得到（每次付一半價錢）。第二次可以自己再走到，或派戰將去。好感度會用玩家顏色的小圓點顯示在里長格上。</li>
+          <li>要<b>拜訪 ${R.chiefVisits} 次</b>才拉攏得到（每次付一半價錢）。也可以派戰將去拉攏（見「行動」）。好感度會用玩家顏色的小圓點顯示在里長格上。</li>
           <li>拉攏：支持者 + ${R.chiefBuyFans}。</li>
           <li>每擁有 ${R.chiefFeeEvery} 回合，付一次地方經營費（價錢 × ${pct(R.chiefFeeRate)}），付不出來里長就跑掉。</li>
           <li>每回合：帶來 ${R.chiefFansPerTurn} 位支持者。</li>
@@ -130,7 +138,7 @@ function guideHTML() {
 
     <section>
       <h3>行政區</h3>
-      <p>台北市有 ${DISTRICTS.length} 個行政區，地圖上每一區的第一格旁邊有<b>行政區看板</b>（寫著這區有幾格）。把<b>同一區的地標和里長全部拿下</b>：</p>
+      <p>地圖是照真實台北市的形狀做的（中間的區放大一點），有 ${DISTRICTS.length} 個行政區。每一區的草地有不同的顏色，區和區之間有白線，每一區的第一格旁邊有<b>行政區看板</b>。把<b>同一區的地標和里長全部拿下</b>：</p>
       <ul>
         <li>那一區的地標（還沒蓋總部時）過路費加倍。</li>
         <li><b>整區加成</b>：2 格以上的區，每回合再 + ${R.districtBonus} 位支持者。</li>

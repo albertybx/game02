@@ -17,6 +17,11 @@ const HOP_IDLE = 7;         // 輪到自己時原地跳多高
 const LAND_MARGIN = 1;      // 路線外面留幾格陸地（越小，海岸線越貼著路線，地圖形狀越明顯）
 const UNOWNED_COLOR = 0x9a9aa6;  // 還沒人買的地：灰色
 const SHOW_BUILDING_NAMES = false; // 要不要在建築下面顯示名字
+// 每一區的草地染一點不同的顏色（參考台北市行政區圖），一眼看得出哪幾格是同一區
+const DISTRICT_TINTS = {
+  中正區: 0x8dc63f, 萬華區: 0x3f7a1a, 大同區: 0xf7941d, 中山區: 0xf7cc1d, 士林區: 0xf5be91, 北投區: 0xed9471,
+  內湖區: 0xc5ff49, 松山區: 0xfff949, 南港區: 0x004a80, 信義區: 0x7da7d8, 文山區: 0x002157, 大安區: 0xacd373,
+};
 
 class GameScene extends Phaser.Scene {
   constructor() { super('game'); }
@@ -33,7 +38,7 @@ class GameScene extends Phaser.Scene {
     this.round = 1;
     this.current = 0;
     this.gameOver = false;
-    this.tileState = TILES.map(() => ({ owner: null, level: 0, since: 0, bonus: 0, favor: [0, 0, 0, 0] }));
+    this.tileState = TILES.map(() => ({ owner: null, level: 0, since: 0, bonus: 0, favor: [0, 0, 0, 0], landmark: null }));
     this.generals = new GeneralSystem(this);
     this.players = [];
     for (let i = 0; i < this.playerCount; i++) {
@@ -67,10 +72,10 @@ class GameScene extends Phaser.Scene {
     this.drawGround();
     this.drawRoad();
     this.drawLots();
-    this.bakeStatic();
     TILES.forEach((t, i) => this.refreshTile(i));
     this.stationIcons = [];
     this.drawTrees();
+    this.bakeStatic();
     this.drawDistrictSigns();
     this.createTokens();
     this.setupCamera();
@@ -104,13 +109,16 @@ class GameScene extends Phaser.Scene {
     if (path.length !== TILES.length) console.warn(`地圖路線有 ${path.length} 格，但 TILES 有 ${TILES.length} 格，兩個要一樣`);
     const onPath = new Set(path.map((p) => key(p.col, p.row)));
 
-    // 2. 範圍（路線外面多留 3 格放樹和海岸）
-    const cols = path.map((p) => p.col);
-    const rows = path.map((p) => p.row);
-    const minC = Math.min(...cols) - 3;
-    const maxC = Math.max(...cols) + 3;
-    const minR = Math.min(...rows) - 3;
-    const maxR = Math.max(...rows) + 3;
+    // 2. 陸地：照 data.js 的 MAP_LAND（真實台北市的形狀）
+    const land = new Set();
+    MAP_LAND.forEach((line, r) => [...line].forEach((ch, c) => { if (ch !== '.') land.add(key(c, r)); }));
+    path.forEach((p) => land.add(key(p.col, p.row)));
+    const cs = [...land].map((k) => Number(k.split(',')[0]));
+    const rs = [...land].map((k) => Number(k.split(',')[1]));
+    const minC = Math.min(...cs) - 2;
+    const maxC = Math.max(...cs) + 2;
+    const minR = Math.min(...rs) - 2;
+    const maxR = Math.max(...rs) + 2;
 
     // 3. 從外圍往內灌水，灌不到的就是路線圍起來的「城市內部」
     const outside = new Set();
@@ -122,16 +130,7 @@ class GameScene extends Phaser.Scene {
       outside.add(k);
       stack.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
     }
-    const inside = new Set();
-    const land = new Set(onPath);
-    for (let c = minC; c <= maxC; c++) {
-      for (let r = minR; r <= maxR; r++) {
-        const k = key(c, r);
-        if (!outside.has(k) && !onPath.has(k)) { inside.add(k); land.add(k); }
-        // 路線外面緊鄰的一圈也是陸地（放建築和樹），海岸線就會跟著路線的形狀
-        if (outside.has(k) && path.some((p) => Math.max(Math.abs(p.col - c), Math.abs(p.row - r)) <= LAND_MARGIN)) land.add(k);
-      }
-    }
+    const inside = new Set([...land].filter((k) => !outside.has(k) && !onPath.has(k)));
 
     // 4. 地標和里長的空地：選路旁邊一格。優先選「後面」（畫面上方），建築才不會擋住路上的角色
     const taken = new Set(onPath);
@@ -160,7 +159,27 @@ class GameScene extends Phaser.Scene {
     }
     if (park) [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([a, b]) => taken.add(key(park.col + a, park.row + b)));
 
-    this.board = { path, land, inside, lots, park, taken, minC, maxC, minR, maxR, key };
+    // 6. 每一格陸地屬於哪一區：離它最近的路線格子是哪一區（特殊格算前一格的區）
+    const tileDistrict = [];
+    let last = TILES.find((t) => t.district).district;
+    for (let k = 0; k < TILES.length; k++) { if (TILES[k].district) last = TILES[k].district; tileDistrict[k] = last; }
+    const district = new Map();
+    let frontier = path.map((p, k) => [p.col, p.row, tileDistrict[k]]);
+    frontier.forEach(([c, r, d]) => district.set(key(c, r), d));
+    while (frontier.length) {
+      const next = [];
+      for (const [c, r, d] of frontier) {
+        for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const k = key(c + dc, r + dr);
+          if (!land.has(k) || district.has(k)) continue;
+          district.set(k, d);
+          next.push([c + dc, r + dr, d]);
+        }
+      }
+      frontier = next;
+    }
+
+    this.board = { path, land, inside, lots, park, taken, minC, maxC, minR, maxR, key, district };
   }
 
   // 把收集到的「不會動的地面」畫進一張大圖，然後刪掉原本的一百多個小物件
@@ -172,11 +191,18 @@ class GameScene extends Phaser.Scene {
     const y0 = Math.floor(Math.min(...pts.map((q) => q.y)) - ISO_H);
     const w = Math.ceil(Math.max(...pts.map((q) => q.x)) + ISO_W - x0);
     const h = Math.ceil(Math.max(...pts.map((q) => q.y)) + ISO_H + 60 - y0);
-    const rt = this.add.renderTexture(x0, y0, w, h).setOrigin(0).setDepth(-900);
-    // 照原本的前後順序畫
+    // 照原本的前後順序畫；切成 2048 大小的幾塊（有些手機一張圖太大會畫不出來）
     list.sort((a, b) => a.depth - b.depth);
-    for (const o of list) rt.draw(o, -x0, -y0);
-    rt.render();
+    const CH = 2048;
+    for (let bx = 0; bx < w; bx += CH) {
+      for (let by = 0; by < h; by += CH) {
+        const cw = Math.min(CH, w - bx);
+        const chh = Math.min(CH, h - by);
+        const rt = this.add.renderTexture(x0 + bx, y0 + by, cw, chh).setOrigin(0).setDepth(-900);
+        for (const o of list) rt.draw(o, -x0 - bx, -y0 - by);
+        rt.render();
+      }
+    }
     for (const o of list) o.destroy();
     this.staticParts = [];
   }
@@ -228,7 +254,7 @@ class GameScene extends Phaser.Scene {
   drawWater() {
     // 背景的河水：有 AI 畫的材質就鋪滿並慢慢流動，沒有就畫簡單的波紋
     if (this.textures.exists('bld_water')) {
-      const water = this.add.tileSprite(-1200, -1200, 4800, 4000, 'bld_water').setOrigin(0).setDepth(-1000);
+      const water = this.add.tileSprite(-2600, -1800, 8000, 6000, 'bld_water').setOrigin(0).setDepth(-1000);
       this.tweens.add({ targets: water, tilePositionX: 128, tilePositionY: 64, duration: 9000, repeat: -1 });
       return;
     }
@@ -270,6 +296,26 @@ class GameScene extends Phaser.Scene {
         g.fillStyle(rnd.frac() < 0.5 ? 0x7bc85f : 0x479135, 1);
         g.fillRect(x + rnd.between(-36, 32), y + rnd.between(-12, 10), 4, 4);
       }
+    }
+    // 各區草地蓋一層淡淡的顏色
+    const tintG = this.keepStatic(this.add.graphics().setDepth(-860));
+    for (const k of land) {
+      const [col, row] = k.split(',').map(Number);
+      const c = DISTRICT_TINTS[this.board.district.get(k)];
+      if (c === undefined) continue;
+      const { x, y } = this.iso(col, row);
+      this.diamond(tintG, x, y, ISO_W + 1, ISO_H + 1, c, 0.45);
+    }
+    // 區界線：旁邊是別的區，就在那條邊畫一條白線
+    const border = this.keepStatic(this.add.graphics().setDepth(-850));
+    border.lineStyle(4, 0xffffff, 0.55);
+    for (const k of land) {
+      const [col, row] = k.split(',').map(Number);
+      const d = this.board.district.get(k);
+      const { x, y } = this.iso(col, row);
+      const T = { x, y: y - ISO_H / 2 };
+      if (land.has(key(col - 1, row)) && this.board.district.get(key(col - 1, row)) !== d) border.lineBetween(x - ISO_W / 2, y, T.x, T.y);
+      if (land.has(key(col, row - 1)) && this.board.district.get(key(col, row - 1)) !== d) border.lineBetween(T.x, T.y, x + ISO_W / 2, y);
     }
     // 城市中間的公園噴水池（佔 2x2 格）
     if (park) {
@@ -323,6 +369,7 @@ class GameScene extends Phaser.Scene {
 
   drawLots() {
     this.lotOverlays = [];
+    this.lotBuildings = [];
     const g = this.keepStatic(this.add.graphics().setDepth(-700));
     TILES.forEach((t, i) => {
       if (t.type !== 'property' && t.type !== 'chief') return;
@@ -337,16 +384,11 @@ class GameScene extends Phaser.Scene {
       }
       this.diamondLine(g, x, y, ISO_W - 8, ISO_H - 4, 3, UNOWNED_COLOR);
 
-      // 建築：有 AI 畫的圖就用，沒有就用像素小圖。里長辦公處比地標小一點
-      let bld;
-      const wid = t.type === 'chief' ? ISO_W - 34 : ISO_W - 6;
-      if (this.textures.exists(`bld_${t.icon}`)) {
-        bld = this.add.image(x, y + ISO_H / 2 - 2 - (t.type === 'chief' ? 10 : 0), `bld_${t.icon}`).setOrigin(0.5, 1);
-        bld.setScale(wid / bld.width);
-      } else {
-        bld = this.add.image(x, y + 14, this.textures.exists(t.icon) ? t.icon : 'station').setOrigin(0.5, 1).setScale(t.icon === 'taipei101' ? 7 : 5);
-      }
-      bld.setDepth(y + 20);
+      // 建築：里長辦公處固定；空地上的建築看蓋到哪個階段（refreshTile 換圖）
+      const bld = this.add.image(x, y + ISO_H / 2 - 2 - (t.type === 'chief' ? 10 : 0), 'bld_chief').setOrigin(0.5, 1).setDepth(y + 20);
+      if (t.type === 'chief') bld.setScale((ISO_W - 34) / bld.width);
+      this.lotBuildings[i] = bld;
+      const hit = this.add.zone(x, y - 20, ISO_W - 20, ISO_H + 40).setDepth(y + 19);
 
       // 地圖上不顯示名字（角色踩到哪一格，畫面上方會顯示那一格的名字）
       if (SHOW_BUILDING_NAMES) {
@@ -359,8 +401,8 @@ class GameScene extends Phaser.Scene {
       this.lotOverlays[i] = this.add.container(x, y).setDepth(y + 25);
 
       // 點建築看資訊（拖曳地圖時不算）
-      bld.setInteractive();
-      bld.on('pointerup', (p) => {
+      hit.setInteractive();
+      hit.on('pointerup', (p) => {
         if (p.getDistance() < 12) this.showTileInfo(i);
       });
     });
@@ -375,7 +417,11 @@ class GameScene extends Phaser.Scene {
       // 斜 45 度的畫面裡，樹會擋住「在它後面（左上方）」的東西。
       // 後面緊鄰的是路、建築或公園的話就不種樹，免得擋住
       if (taken.has(key(col - 1, row)) || taken.has(key(col, row - 1)) || taken.has(key(col - 1, row - 1))) continue;
-      if (rnd.frac() > (inside.has(k) ? 0.55 : 0.75)) continue;
+      if (rnd.frac() > (inside.has(k) ? 0.5 : 0.45)) continue;
+      // 附近兩格內都沒有路和建築的樹，畫進大圖（不會擋到角色）
+      let far = true;
+      for (let dc = -2; dc <= 2 && far; dc++) for (let dr = -2; dr <= 2; dr++) if (taken.has(key(col + dc, row + dr))) { far = false; break; }
+      this.treeStatic = far;
       const n = rnd.between(1, 2);
       for (let m = 0; m < n; m++) {
         const { x, y } = this.iso(col, row);
@@ -393,6 +439,7 @@ class GameScene extends Phaser.Scene {
       const [key, h] = kinds.find((k) => (pick -= k[2]) < 0) || kinds[0];
       const t = addIcon(this, x, y + 4, key, h * rnd.realInRange(0.85, 1.1)).setOrigin(0.5, 1).setDepth(y);
       if (rnd.frac() < 0.5) t.setFlipX(true);
+      if (this.treeStatic) this.keepStatic(t);
       return;
     }
     const g = this.add.graphics().setDepth(y);
@@ -412,7 +459,19 @@ class GameScene extends Phaser.Scene {
     g.fillRect(x - 3 * s, y - 9 * s, s, s);
   }
 
+  // 空地上的建築：空地沒有房子 → 工地 → 小建築 → 地標
+  refreshBuilding(i) {
+    const bld = this.lotBuildings && this.lotBuildings[i];
+    if (!bld || TILES[i].type !== 'property') return;
+    const st = this.tileState[i];
+    const key = st.level === 0 ? null : st.level === 1 ? 'site' : st.level === 2 ? 'office' : st.landmark;
+    if (!key || !this.textures.exists(`bld_${key}`)) { bld.setVisible(false); return; }
+    bld.setTexture(`bld_${key}`).setVisible(true);
+    bld.setScale((st.level === 3 ? ISO_W - 6 : ISO_W - 22) / bld.width);
+  }
+
   refreshTile(i) {
+    this.refreshBuilding(i);
     const ov = this.lotOverlays[i];
     if (!ov) return;
     ov.removeAll(true);
@@ -450,8 +509,7 @@ class GameScene extends Phaser.Scene {
       if (this.textures.exists('bld_flag')) return addIcon(this, fx, fy, 'flag', h).setOrigin(0.5, 1).setTint(color);
       return this.add.image(fx, fy, `flag${st.owner}`).setOrigin(0.15, 0.8).setScale(h / 16);
     };
-    ov.add(makeFlag(-44, 8, 44));
-    for (let k = 0; k < st.level; k++) ov.add(makeFlag(38 - k * 16, 12 + k * 6, 34));
+    ov.add(makeFlag(-44, 8, st.level === 0 || TILES[i].type === 'chief' ? 44 : 32));
   }
 
   // 行政區看板：每一區的第一格旁邊立一塊牌子，看得出哪幾格是同一區
@@ -549,6 +607,12 @@ class GameScene extends Phaser.Scene {
   // 鏡頭跟著某位玩家的定位點（每一幀在 update() 裡追過去）
   followPlayer(p) {
     this.camTarget = this.anchors[p.id];
+  }
+
+  // 鏡頭移到某一格的空地（蓋房子時看得到）
+  followTile(i) {
+    const cell = this.lotCell(i);
+    if (cell) this.camTarget = this.iso(cell.col, cell.row);
   }
 
   stopFollow() {
@@ -663,6 +727,8 @@ class GameScene extends Phaser.Scene {
       incomeMsg = `\n地盤支持者 +${got}${this.districtBonusOf(p) ? '（含整區）' : ''}`;
     }
     // 地標租金、里長經營費
+    const hubs = TILES.filter((t, i) => this.tileState[i].owner === p.id && this.effectOf(i) === 'hub').length;
+    if (hubs) { this.changeMoney(p, 50 * hubs); incomeMsg += `\n交通樞紐 +$${50 * hubs}`; }
     const up = await this.payUpkeep(p);
     incomeMsg = incomeMsg ? incomeMsg + up : up.replace(/^，/, '\n');
     if (p.bankrupt) return;
@@ -742,6 +808,37 @@ class GameScene extends Phaser.Scene {
     await this.walk(p, steps);
   }
 
+  // ---------- 地標 ----------
+  landmarkOf(i) {
+    const st = this.tileState[i];
+    if (TILES[i].type !== 'property' || st.level < 3 || !st.landmark) return null;
+    return LANDMARKS[TILES[i].district].find((l) => l.key === st.landmark) || null;
+  }
+
+  effectOf(i) { const l = this.landmarkOf(i); return l ? l.effect : null; }
+
+  // 這位玩家在這一區有沒有某種效果的地標
+  hasEffectIn(ownerId, district, effect) {
+    return TILES.some((t, i) => t.district === district && this.tileState[i].owner === ownerId && this.effectOf(i) === effect);
+  }
+
+  tileName(i) {
+    const t = TILES[i];
+    if (t.type !== 'property') return t.name;
+    const l = this.landmarkOf(i);
+    if (l) return l.name;
+    const st = this.tileState[i];
+    return st.owner === null ? `${t.district}空地` : `${t.district}${BUILD_STAGES[st.level]}`;
+  }
+
+  // 蓋到第 3 階段：從這一區的地標裡隨機抽一個（地圖上已經有的不再抽）
+  pickLandmark(i) {
+    const pool = LANDMARKS[TILES[i].district];
+    const used = new Set(this.tileState.map((s) => s.landmark).filter(Boolean));
+    const free = pool.filter((l) => !used.has(l.key));
+    return Phaser.Utils.Array.GetRandom(free.length ? free : pool).key;
+  }
+
   // ---------- 錢 ----------
   // 過路費（錢）
   rentOf(i) {
@@ -750,7 +847,8 @@ class GameScene extends Phaser.Scene {
     if (t.type === 'chief') return Math.round(t.price * GAME_RULES.chiefRentRate);
     let base = Math.round(t.price / 10);
     if (st.level === 0 && this.ownsDistrict(st.owner, t.district)) base *= 2;
-    return base * GAME_RULES.rentMultiplier[st.level];
+    const mult = this.effectOf(i) === 'market' ? 1.5 : 1;
+    return Math.round(base * GAME_RULES.rentMultiplier[st.level] * mult);
   }
 
   // 【B】對手踩到時，倒戈過來的支持者
@@ -758,7 +856,7 @@ class GameScene extends Phaser.Scene {
     const t = TILES[i];
     const st = this.tileState[i];
     if (t.type === 'chief') return GAME_RULES.chiefSteal;
-    return Math.round(t.price * GAME_RULES.landmarkStealRate * (st.level + 1));
+    return Math.round(t.price * GAME_RULES.landmarkStealRate * (st.level + 1) * (this.effectOf(i) === 'temple' ? 2 : 1));
   }
 
   // 【A】這格每回合帶給地主的支持者
@@ -766,7 +864,7 @@ class GameScene extends Phaser.Scene {
     const t = TILES[i];
     const st = this.tileState[i];
     if (t.type === 'chief') return GAME_RULES.chiefFansPerTurn;
-    return Math.round(t.price * GAME_RULES.landmarkFansRate * (st.level + 1));
+    return Math.round(t.price * GAME_RULES.landmarkFansRate * (st.level + 1)) + (this.effectOf(i) === 'tourist' ? 50 : 0);
   }
 
   fansIncomeOf(p) {
@@ -867,10 +965,11 @@ class GameScene extends Phaser.Scene {
     if (p.rallies < R.rallyMax && p.money >= R.rallyCost) {
       acts.push({ key: 'rally', label: `造勢晚會：花 $${R.rallyCost}，支持者 +${R.rallyFans}`, note: `每場 ${R.rallyMax} 次，還剩 ${R.rallyMax - p.rallies} 次` });
     }
+    if (this.buildable(p).length) acts.push({ key: 'build', label: '蓋房子', note: '空地 → 工地 → 小建築 → 地標（每回合一次）' });
     if (this.generals.canRemote(p)) acts.push({ key: 'remote', label: '遠端派戰將出任務', note: `不用走到里長格，效果 ×${GENERAL_RULES.remoteRate}` });
     const leader = this.generals.debateTarget(p);
     if (leader) acts.push({ key: 'debate', label: `向 ${leader.name} 發起辯論挑戰`, note: `花 $${R.debateCost}，贏了 +${R.debateFans}、輸了 -${R.debateLoseFans} 位支持者，每場一次` });
-    if (this.generals.wooTargets(p).length) acts.push({ key: 'woo', label: '派戰將去拉攏里長', note: `拜訪過一次的里長，派戰將去完成拉攏（${GENERAL_RULES.wooTurns} 回合）` });
+    if (this.generals.wooTargets(p).length) acts.push({ key: 'woo', label: '派戰將去拉攏里長', note: `不用走到里長格，派戰將去拉攏（${GENERAL_RULES.wooTurns}～${GENERAL_RULES.wooTurns + 1} 回合）` });
     return acts;
   }
 
@@ -878,6 +977,7 @@ class GameScene extends Phaser.Scene {
     const R = GAME_RULES;
     if (this.generals.cpuWantsDebate(p)) return 'debate';
     if (this.generals.cpuWoo(p)) return 'woo';
+    if (this.buildable(p).some((i) => p.money - this.upgradeCost(i) >= 450)) return 'build';
     if (p.rallies < R.rallyMax && p.money >= 700 && this.round > R.maxRounds / 2) return 'rally';
     if (this.generals.cpuWantsRemote(p)) return 'remote';
     return null;
@@ -918,6 +1018,7 @@ class GameScene extends Phaser.Scene {
       else if (pick === 'remote') await this.generals.remoteMission(p);
       else if (pick === 'debate') await this.generals.debate(p);
       else if (pick === 'woo') await this.generals.woo(p);
+      else if (pick === 'build') await this.buildAction(p);
       if (p.bankrupt) return;
     }
   }
@@ -951,6 +1052,7 @@ class GameScene extends Phaser.Scene {
     for (const i of this.generals.ownChiefs(p)) {
       const held = this.round - this.tileState[i].since;
       if (held <= 0 || held % R.chiefFeeEvery !== 0) continue;
+      if (this.hasEffectIn(p.id, TILES[i].district, 'gov')) continue;
       const fee = this.chiefFeeOf(i);
       if (p.money >= fee) { p.money -= fee; paid += fee; } else lost.push(i);
     }
@@ -979,7 +1081,7 @@ class GameScene extends Phaser.Scene {
   }
 
   loseTile(i) {
-    Object.assign(this.tileState[i], { owner: null, level: 0, bonus: 0, favor: [0, 0, 0, 0] });
+    Object.assign(this.tileState[i], { owner: null, level: 0, bonus: 0, favor: [0, 0, 0, 0], landmark: null });
     this.generals.guardBack(i);
     this.refreshTile(i);
   }
@@ -1059,8 +1161,7 @@ class GameScene extends Phaser.Scene {
     const t = TILES[i];
     if (t.type === 'chief') { await this.offerChief(p, i); return; }
     const canBuy = p.money >= t.price;
-    const what = t.type === 'chief' ? `拉攏 ${t.name}` : `買下 ${t.name}`;
-    this.hud.say(`${t.name} 還沒有人插旗！\n要花 $${t.price} ${what} 嗎？${canBuy ? '' : '\n（錢不夠…）'}`);
+    this.hud.say(`${t.district}有一塊空地！要花 $${t.price} 買下嗎？\n之後可以慢慢蓋成${t.district}的地標${canBuy ? '' : '\n（錢不夠…）'}`);
     const autoBuy = canBuy && p.money - t.price >= 200;
     const ans = await this.hud.choose([
       { label: `${t.type === 'chief' ? '拉攏' : '買下'} $${t.price}`, value: true, fill: 0x00e436, disabled: !canBuy },
@@ -1078,7 +1179,7 @@ class GameScene extends Phaser.Scene {
       const gain = this.changeFans(p, t.type === 'chief' ? GAME_RULES.chiefBuyFans : Math.round(t.price * GAME_RULES.buyFansRate), true);
       this.hud.say(t.type === 'chief'
         ? `${p.name} 拉攏了 ${t.name}！\n支持者 +${gain}，之後每回合 +${this.fansPerTurnOf(i)}`
-        : `${p.name} 買下了 ${t.name}！\n支持者 +${gain}，過路費 $${this.rentOf(i)}`);
+        : `${p.name} 買下了${t.district}的空地！\n支持者 +${gain}，過路費 $${this.rentOf(i)}`);
       this.hud.refreshPanels();
       await this.wait(1000);
     } else {
@@ -1136,33 +1237,77 @@ class GameScene extends Phaser.Scene {
     await this.wait(1200);
   }
 
+  // 回到自己的空地：可以蓋下一個階段（擲骰子前的「行動」也可以蓋）
   async offerUpgrade(p, i) {
     const t = TILES[i];
     const st = this.tileState[i];
     if (st.level >= GAME_RULES.maxLevel) {
-      this.hud.say(`${t.name} 的競選總部已經蓋滿了！\n過路費 $${this.rentOf(i)}`);
+      const l = this.landmarkOf(i);
+      this.hud.say(`${l ? l.name : t.name} 已經完工了！\n過路費 $${this.rentOf(i)}`);
       await this.wait(1100);
       return;
     }
     const cost = this.upgradeCost(i);
     const canBuild = p.money >= cost;
-    this.hud.say(`回到自己的 ${t.name}。\n要花 $${cost} 蓋第 ${st.level + 1} 層競選總部嗎？`);
-    const autoBuild = canBuild && p.money - cost >= 300;
+    const next = BUILD_STAGES[st.level + 1];
+    this.hud.say(`回到自己的${this.tileName(i)}。\n要花 $${cost} 蓋成「${next}」嗎？${st.level === 2 ? '\n完工會隨機變成這區的地標！' : ''}`);
     const ans = await this.hud.choose([
       { label: `蓋！ $${cost}`, value: true, fill: 0x00e436, disabled: !canBuild },
       { label: '先不要', value: false, fill: 0xc2c3c7 },
-    ], p, autoBuild);
-    if (ans) {
-      p.money -= cost;
-      st.level++;
-      this.refreshTile(i);
-      Sfx.buy();
-      this.flashTile(i);
-      const gain = this.changeFans(p, Math.round(t.price * GAME_RULES.buildFansRate), true);
-      this.hud.say(`${t.name} 蓋好第 ${st.level} 層競選總部！\n支持者 +${gain}，過路費變成 $${this.rentOf(i)}`);
-      this.hud.refreshPanels();
+    ], p, canBuild && p.money - cost >= 400);
+    if (ans) await this.build(p, i);
+  }
+
+  async build(p, i) {
+    const t = TILES[i];
+    const st = this.tileState[i];
+    p.money -= this.upgradeCost(i);
+    st.level++;
+    if (st.level === 3) st.landmark = this.pickLandmark(i);
+    this.refreshTile(i);
+    this.hud.showTile(i, p);
+    Sfx.buy();
+    this.flashTile(i);
+    const gain = this.changeFans(p, Math.round(t.price * GAME_RULES.buildFansRate), true);
+    const l = this.landmarkOf(i);
+    this.followTile(i);
+    if (l) {
+      const e = LANDMARK_EFFECTS[l.effect];
+      Sfx.tune([523, 659, 784, 1047, 1319], 0.09);
+      this.hud.say(`地標完工：${l.name}！支持者 +${gain}\n【${e.name}】${e.text}`);
+      await this.wait(1800);
+    } else {
+      this.hud.say(`${t.district}的空地蓋成「${BUILD_STAGES[st.level]}」！\n支持者 +${gain}，過路費變成 $${this.rentOf(i)}`);
       await this.wait(1100);
     }
+    this.followPlayer(p);
+    this.hud.refreshPanels();
+  }
+
+  // 可以蓋的空地（擲骰子前的「行動」用）
+  buildable(p) {
+    return TILES.map((t, i) => i).filter((i) => TILES[i].type === 'property' && this.tileState[i].owner === p.id
+      && this.tileState[i].level < GAME_RULES.maxLevel && p.money >= this.upgradeCost(i));
+  }
+
+  async buildAction(p) {
+    const list = this.buildable(p);
+    if (!list.length) return;
+    let auto;
+    if (!p.human) {
+      // 電腦：先蓋快完工的、比較貴的
+      const best = [...list].sort((a, b) => (this.tileState[b].level - this.tileState[a].level) || (TILES[b].price - TILES[a].price))[0];
+      auto = String(best);
+    }
+    const v = await gvModal({
+      title: '蓋房子', color: '#00e436', who: p, autoValue: auto,
+      body: `<p class="gv-tip">每回合可以在擲骰子前蓋一次：空地 → 工地 → 小建築 → <b>地標</b>（完工時隨機抽這一區的地標，有特殊效果）。你有 $${p.money}。</p>
+        <div class="gv-actions">${list.map((i) => `<button type="button" data-v="${i}">${escapeHTML(this.tileName(i))} → ${BUILD_STAGES[this.tileState[i].level + 1]}<small>$${this.upgradeCost(i)}・過路費 $${this.rentOf(i)} → 更高</small></button>`).join('')}</div>
+        <button type="button" class="gv-skip" data-v="skip">先不要</button>`,
+    });
+    if (v === 'skip') return;
+    const i = Number(v);
+    await this.build(p, i);
   }
 
   async payRent(p, i) {
@@ -1291,7 +1436,9 @@ class GameScene extends Phaser.Scene {
       this.hud.say(`【${t.name}】價格 $${t.price}（拜訪 ${GAME_RULES.chiefVisits} 次）\n${owner}${favor ? `・好感：${favor}` : ''}\n每回合支持者 +${this.fansPerTurnOf(i)}，過路費 $${rent}，每 ${GAME_RULES.chiefFeeEvery} 回合經營費 $${this.chiefFeeOf(i)}`);
       return;
     }
-    this.hud.say(`【${t.name}】${t.district}・價格 $${t.price}\n${owner}・總部 ${st.level} 層\n每回合支持者 +${this.fansPerTurnOf(i)}，過路費 $${rent}，租金每回合 $${this.landmarkUpkeepOf(i)}`);
+    const l = this.landmarkOf(i);
+    const eff = l ? `\n${LANDMARK_EFFECTS[l.effect].name}：${LANDMARK_EFFECTS[l.effect].text}` : '';
+    this.hud.say(`【${this.tileName(i)}】$${t.price}・${owner}\n每回合 +${this.fansPerTurnOf(i)} 支持・過路費 $${rent}${eff}`);
   }
 
   // ---------- 遊戲結束 ----------
