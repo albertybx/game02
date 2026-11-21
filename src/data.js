@@ -3,11 +3,11 @@
 
 const GAME_RULES = {
   startMoney: 2000,   // 每人一開始的錢
-  passGoBonus: 300,   // 經過起點拿的錢
+  passGoBonus: 400,   // 經過起點拿的錢
   maxRounds: 30,      // 第幾回合結束就是「投票日」，比誰的支持者最多
   startFans: 1000,    // 每人一開始的支持者
   maxLevel: 3,        // 空地最多蓋到第幾階段（3 = 地標完工）
-  rentMultiplier: [1, 3, 7, 14], // 空地 0 → 工地 1 → 小建築 2 → 地標 3：過路費是基本過路費的幾倍
+  rentMultiplier: [1, 3, 6, 10], // 空地 0 → 工地 1 → 小建築 2 → 地標 3：過路費是基本過路費的幾倍
   dice: 2,            // 一次擲幾顆骰子（地圖變大了，擲兩顆走比較快）
   towFine: 100,       // 拖吊場罰款
   startSpread: 2,     // 起點錯開：第 2 位玩家從第 2 格出發、第 3 位第 4 格…（先擲骰的人才不會太有利）
@@ -26,7 +26,7 @@ const GAME_RULES = {
   chiefRentRate: 0.1,   // 里長格過路費：價錢 × 0.1
   chiefVisits: 2,       // 要拜訪幾次才拉攏得到（每次付 價錢 ÷ 2）
   chiefFeeEvery: 3,     // 每擁有幾回合，要付一次「地方經營費」
-  chiefFeeRate: 0.4,    // 地方經營費 = 價錢 × 0.4（付不出來，里長就跑掉）
+  chiefFeeRate: 0.3,    // 地方經營費 = 價錢 × 0.3（付不出來，里長就跑掉）
 
   // ---- 其他 ----
   districtBonus: 100,   // 整區加成：同一區（2 格以上）的地標和里長全部拿下，每回合再 + 100 位支持者
@@ -40,6 +40,26 @@ const GAME_RULES = {
   debateFans: 250,      //   發起的人贏了：第一名有這麼多支持者倒戈過來（每人每場一次）
   debateLoseFans: 100,  //   發起的人輸了：自己有這麼多支持者倒戈給第一名
 
+
+  // ---- 賺錢的方法 ----
+  donationEvery: 5,       // 政治獻金：每 5 回合，有里長的人領錢
+  donationBase: 80,       //   $80
+  donationPerChief: 30,   //   + 每位里長 $30
+  subsidyBase: 150,       // 選舉補助款：比賽過一半時，每人領 $150
+  subsidyStep: 50,        //   支持者每到一個門檻再 + $50
+  subsidyLevels: [2000, 3000],
+  revenueEvery: 6,        // 地標營收：每 6 回合，每座完工地標依種類收錢（LANDMARK_EFFECTS 的 revenue）
+  sponsorMoney: 200,      // 企業贊助：有完工地標才能接，拿 $200
+  sponsorFans: 120,       //   支持者 -120（被罵財團走狗）
+  sponsorEvery: 10,       //   每 10 回合一次
+  darkMoney: 400,         // 神秘的金援：派戰將去找神秘金主，成功帶回 $400
+  darkTurns: 2,           //   離開 2 回合
+  darkEvery: 8,           //   每 8 回合一次
+  darkBaseRate: 0.45,     //   成功率 = 45% + 人脈 × 8%（最高 90%）
+  darkPerNetwork: 0.08,
+  darkFans: 350,          //   失敗（被檢調盯上）：支持者 -350
+  darkLoyalty: 15,        //   戰將忠誠度 -15
+  sellRate: 0.5,          // 主動賣地：半價賣回給銀行
 
   // ---- 特殊挑戰：英文學習格（首頁可以選擇要不要加入）----
   quizMoney: 200,        // 答對：錢 + 200（大幅）
@@ -87,15 +107,15 @@ const MAP_LAND = [
 ];
 
 // 路線：每個點是一個轉彎處 [col, row]，照順序一格一格連起來，最後回到第一個點。
-// 路線總長度要剛好等於 TILES 的格數（76 格）。
+// 路線總長度要剛好等於 TILES 的格數（78 格）。
 const MAP_ROUTE = [
   [16, 21], [16, 22], [14, 22], [14, 20], [12, 20], [12, 16], [10, 16], [10, 12],
   [11, 12], [11, 9], [8, 9], [8, 8], [5, 8], [5, 5], [12, 5], [12, 6],
   [14, 6], [14, 9], [16, 9], [16, 12], [20, 12], [20, 11], [21, 11], [21, 15],
-  [23, 15], [23, 21], [22, 21], [22, 22], [20, 22], [20, 21],
+  [23, 15], [23, 21], [22, 21], [22, 23], [20, 23], [20, 21],
 ];
 
-// 地圖 76 格，從「起點」（中正區）出發，依序經過 12 個區。
+// 地圖 78 格，從「起點」（中正區）出發，依序經過 12 個區。
 // type: go 起點 / property 空地（可以慢慢蓋成地標）/ chief 里長 / chance 機會 / fate 命運
 //       / talent 戰將招募站 / jam 塞車 / mrt 捷運站 / tow 拖吊場
 const TILES = [
@@ -179,14 +199,16 @@ const TILES = [
   { type: 'chief', name: '文山區里長', icon: 'chief', price: 90, district: '文山區' }, // 66
   { type: 'property', name: '文山空地', price: 120, district: '文山區' }, // 67
   { type: 'chance', name: '機會', icon: 'chance' }, // 68
-  { type: 'property', name: '文山空地', price: 120, district: '文山區' }, // 69
-  { type: 'fate', name: '命運', icon: 'ballot' }, // 70
+  { type: 'talent', name: '戰將招募站', icon: 'talent' }, // 69
+  { type: 'property', name: '文山空地', price: 120, district: '文山區' }, // 70
+  { type: 'fate', name: '命運', icon: 'ballot' }, // 71
   // ---- 大安區 ----
-  { type: 'property', name: '大安空地', price: 260, district: '大安區' }, // 71
-  { type: 'chief', name: '大安區里長', icon: 'chief', price: 140, district: '大安區' }, // 72
-  { type: 'property', name: '大安空地', price: 260, district: '大安區' }, // 73
-  { type: 'chance', name: '機會', icon: 'chance' }, // 74
+  { type: 'property', name: '大安空地', price: 260, district: '大安區' }, // 72
+  { type: 'talent', name: '戰將招募站', icon: 'talent' }, // 73
+  { type: 'chief', name: '大安區里長', icon: 'chief', price: 140, district: '大安區' }, // 74
   { type: 'property', name: '大安空地', price: 260, district: '大安區' }, // 75
+  { type: 'chance', name: '機會', icon: 'chance' }, // 76
+  { type: 'property', name: '大安空地', price: 260, district: '大安區' }, // 77
 ];
 
 // =====================================================================
@@ -196,12 +218,12 @@ const TILES = [
 const BUILD_STAGES = ['空地', '工地', '小建築', '地標'];
 
 const LANDMARK_EFFECTS = {
-  tourist: { name: '觀光人潮', text: '每回合支持者再 +50' },
-  market:  { name: '夜市商圈', text: '過路費 ×1.5' },
-  temple:  { name: '香火鼎盛', text: '對手踩到時倒戈 ×2' },
-  gov:     { name: '政府機關', text: '同區里長免經營費、穩固度 +2' },
-  culture: { name: '文化地標', text: '這一區出任務效果 ×1.5' },
-  hub:     { name: '交通樞紐', text: '每回合 +$50' },
+  tourist: { name: '觀光人潮', text: '每回合支持者再 +50', revenue: 100 },
+  market:  { name: '夜市商圈', text: '過路費 ×1.5', revenue: 120 },
+  temple:  { name: '香火鼎盛', text: '對手踩到時倒戈 ×2', revenue: 80 },
+  gov:     { name: '政府機關', text: '同區里長免經營費、穩固度 +2', revenue: 60 },
+  culture: { name: '文化地標', text: '這一區出任務效果 ×1.5', revenue: 80 },
+  hub:     { name: '交通樞紐', text: '每回合 +$50', revenue: 0 },
 };
 
 const LANDMARKS = {
@@ -319,6 +341,9 @@ const MISSIONS = [
   { key: 'wedding', name: '跑紅白帖', stat: 'charisma', turns: 1, note: '不花錢' },
   { key: 'service', name: '選民服務', stat: 'network', turns: 2, note: '那一格樁腳更穩 +1' },
   { key: 'media', name: '媒體宣傳', stat: 'eloquence', turns: 3, note: '要花錢，效果 ×1.5' },
+  // 下面兩個帶回「錢」
+  { key: 'dinner', name: '募款餐會', stat: 'charisma', turns: 2, money: true, note: '看魅力，帶回錢' },
+  { key: 'tender', name: '政府標案', stat: null, turns: 2, money: true, note: '先付錢，回來時里長還是你的就賺錢' },
 ];
 
 const GENERAL_RULES = {
@@ -333,6 +358,12 @@ const GENERAL_RULES = {
   missionPerStat: 30,
   mediaCost: 100,         // 媒體宣傳要花的錢（效果比較大）
   mediaBonus: 1.5,        // 媒體宣傳的效果倍數
+  dinnerCost: 50,         // 募款餐會：場地費
+  dinnerBase: 60,         //   帶回 $60 + 魅力 × 30 + 骰子 × 10
+  dinnerPerStat: 30,
+  tenderCost: 80,         // 政府標案：先付 $80
+  tenderMoney: 250,       //   回來時里長還是你的：拿 $250
+  tenderRefund: 40,       //   里長被搶走：只退 $40
   missionRest: 1,         // （舊規則，沒用到）
   remoteRate: 0.7,        // 遠端派任務（不在那一格）：效果 × 0.7
   wooTurns: 2,            // 派戰將去拉攏「拜訪過一次」的里長，要離開幾回合

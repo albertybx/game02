@@ -40,9 +40,10 @@ function guideHTML() {
     <section>
       <h3>每回合會發生什麼</h3>
       <ol>
-        <li>出任務的戰將回來，帶回支持者。</li>
+        <li>出任務的戰將回來，帶回支持者或錢。</li>
+        <li>有時候會有<b>固定收入</b>：政治獻金、選舉補助款、地標營收（見「怎麼賺錢」）。</li>
         <li>你擁有的<b>地標和里長</b>帶來支持者；同時付<b>地標租金</b>（每回合）和<b>里長經營費</b>（每 ${R.chiefFeeEvery} 回合）。付不出來就會失去那一格。</li>
-        <li>擲骰子前可以按「<b>行動</b>」（見下面），然後擲 ${R.dice} 顆骰子往前走。</li>
+        <li>擲骰子前可以按「<b>行動</b>」（見下面），然後擲骰子（點骰子可以換 1 顆或 2 顆），照角色腳下<b>黃色箭頭</b>的方向走。</li>
         <li>停在哪一格，就發生那一格的事。</li>
       </ol>
       <p>大家的起點是錯開的（每人往前 ${R.startSpread} 格），先擲骰子的人才不會太佔便宜。經過起點領 $${R.passGoBonus}。</p>
@@ -60,6 +61,9 @@ function guideHTML() {
         <li><b>造勢晚會</b>：花 $${R.rallyCost}，支持者 + ${R.rallyFans}。每場最多 ${R.rallyMax} 次。</li>
         <li><b>遠端派戰將出任務</b>：不用走到里長格也能派，但效果 ×${GR.remoteRate}。</li>
         <li><b>派戰將去拉攏里長</b>：還沒人拉攏的里長，派戰將去拉攏。拜訪過一次的只付一半、${GR.wooTurns} 回合；沒拜訪過的付全額、${GR.wooTurns + 1} 回合。</li>
+        <li><b>神秘的金援</b>：派一位戰將去找神秘金主，${R.darkTurns} 回合後回來。成功帶回 $${R.darkMoney}；失敗被檢調盯上，支持者 - ${R.darkFans}、戰將忠誠度 - ${R.darkLoyalty}。成功率 = ${pct(R.darkBaseRate)} + 人脈 × ${pct(R.darkPerNetwork)}。每 ${R.darkEvery} 回合一次。</li>
+        <li><b>企業贊助</b>：有完工的地標才能接。拿 $${R.sponsorMoney}，但支持者 - ${R.sponsorFans}。每 ${R.sponsorEvery} 回合一次。</li>
+        <li><b>賣地換現金</b>：自己的地半價賣回給銀行。</li>
         <li><b>辯論挑戰</b>：下半場落後第一名 ${R.debateGap} 位以上，可以花 $${R.debateCost} 向第一名下戰帖。贏了：第一名有 ${R.debateFans} 位支持者倒戈給你；輸了：你有 ${R.debateLoseFans} 位倒戈給他。每人每場一次。</li>
       </ul>
     </section>
@@ -70,7 +74,16 @@ function guideHTML() {
     </section>
 
     <section>
-      <h3>錢不夠怎麼辦</h3>
+      <h3>怎麼賺錢</h3>
+      <ul>
+        <li><b>經過起點</b>：$${R.passGoBonus}。</li>
+        <li><b>政治獻金</b>：每 ${R.donationEvery} 回合，<b>有里長</b>的人領 $${R.donationBase} + 每位里長 $${R.donationPerChief}。</li>
+        <li><b>選舉補助款</b>：比賽過一半（第 ${Math.floor(R.maxRounds / 2) + 1} 回合）每人領 $${R.subsidyBase}，支持者到 ${R.subsidyLevels.join('、')} 各再 + $${R.subsidyStep}。</li>
+        <li><b>地標營收</b>：每 ${R.revenueEvery} 回合，每座完工地標收錢：${Object.values(LANDMARK_EFFECTS).filter((e) => e.revenue).map((e) => `${e.name} $${e.revenue}`).join('、')}（交通樞紐本來就每回合 +$50）。</li>
+        <li><b>募款餐會、政府標案</b>：派戰將去自己的里長那裡辦（見「戰將」）。</li>
+        <li><b>神秘的金援、企業贊助、賣地</b>：擲骰子前的行動。</li>
+        <li>對手踩到你的地付<b>過路費</b>，機會卡、英文挑戰也有錢。</li>
+      </ul>
       <p>付過路費、罰款時錢不夠，會先把你的地盤<b>半價賣回給銀行</b>（便宜的先賣），還是不夠才破產。</p>
     </section>
 
@@ -109,7 +122,7 @@ function guideHTML() {
           <li>加入後，地圖上會有 ${QUIZ_TILE_SLOTS.length} 格英文挑戰（取代 1 格機會、2 格命運）。</li>
         </ul>`)}
       ${tile('jam', '塞車', '<p>下回合暫停一次。</p>')}
-      ${tile('mrt', '捷運站', '<p>休息一下，吹吹冷氣，沒事發生。</p>')}
+      ${tile('mrt', '捷運站', '<p>可以選擇<b>搭捷運</b>到另一個捷運站。下車後方向隨機：可能照原方向走，也可能開始反方向走（看角色腳下的箭頭）。反方向走一樣會經過起點領錢。</p>')}
       ${tile('siren', '拖吊場', `<p>宣傳車被拖吊，罰款 $${R.towFine}。</p>`)}
     </section>
 
@@ -121,6 +134,8 @@ function guideHTML() {
         <li>跑紅白帖（${MISSIONS[0].turns} 回合）：看魅力，不花錢。</li>
         <li>選民服務（${MISSIONS[1].turns} 回合）：看人脈，那一格的樁腳更穩，比較不容易被拔。</li>
         <li>媒體宣傳（${MISSIONS[2].turns} 回合）：看口才，花 $${GR.mediaCost}，效果 ×${GR.mediaBonus}。</li>
+        <li><b>募款餐會</b>（${MISSIONS[3].turns} 回合）：看魅力，先付場地費 $${GR.dinnerCost}，帶回 $${GR.dinnerBase} + 魅力 × ${GR.dinnerPerStat} + 骰子 × 10 的錢。</li>
+        <li><b>政府標案</b>（${MISSIONS[4].turns} 回合）：先付 $${GR.tenderCost}，回來時里長還是你的就拿 $${GR.tenderMoney}；被搶走只退 $${GR.tenderRefund}。</li>
         <li>駐守：站在自己的里長格時，可以讓戰將留下來防守。駐守後就<b>離開隊伍</b>，不能再派去別的地方；那一格被搶走時才會回來。駐守時要選一個「防守風格」（他最常出的招），對手看得到。</li>
       </ul>
       <p><b>專屬技能</b>：每位戰將都有一個，寫在戰將卡上（★）。</p>
@@ -151,7 +166,6 @@ function guideHTML() {
         <li><b>放大縮小</b>：右上角 ＋／－，手機可以兩指捏合，電腦可以用滑鼠滾輪。</li>
         <li><b>看建築資訊</b>：點一下建築，看價錢、地主、過路費、每回合帶來多少支持者。</li>
         <li><b>看某位玩家</b>：點他的狀態卡，鏡頭會移到他身上。</li>
-        <li><b>即時民調</b>：右上角的「圓餅／長條」按鈕可以切換圖表樣式。</li>
         <li><b>音樂</b>：右上角 ♪ 可以開關。</li>
       </ul>
     </section>`;
