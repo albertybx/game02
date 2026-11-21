@@ -138,6 +138,7 @@ class HudScene extends Phaser.Scene {
     this.changeLog = [];  // 錢、支持者的每一筆變化
     this.lastVals = this.gs.players.map((p) => ({ money: p.money, fans: p.fans }));
     // 右邊有一排按鈕，框框放在按鈕左邊的正中間
+    this.boxOn = 0;     // > 0 時，訊息會跳出事件框
     this.evBox = this.add.container(MAP_VIEW.x + (MAP_VIEW.w - 84) / 2, 0).setDepth(15).setVisible(false);
   }
 
@@ -155,10 +156,14 @@ class HudScene extends Phaser.Scene {
       }
     });
     if (this.changeLog.length > 400) this.changeLog.splice(0, 200);
-    if (changed && this.evBox.visible) this.renderEventBox();
+    if (changed) {
+      // 一般訊息也要記下變化（紀錄用）
+      if (this.evEntry && this.evEntry !== this.boxEntry) this.evEntry.changes = this.summarize(this.evStart);
+      if (this.evBox.visible) this.renderEventBox();
+    }
   }
 
-  showEvent(text) {
+  showEvent(text, popup) {
     const gs = this.gs;
     const p = gs.players[gs.current];
     this.trackChanges();
@@ -167,34 +172,53 @@ class HudScene extends Phaser.Scene {
     this.evEntry = { round: Math.min(gs.round, GAME_RULES.maxRounds), who: p ? p.name : '', color: p ? p.color : '#ffec27', text, changes: '' };
     this.evLog.unshift(this.evEntry);
     if (this.evLog.length > 80) this.evLog.pop();
-    this.renderEventBox(true);
+    if (popup) {
+      this.boxEntry = this.evEntry;
+      this.boxStart = this.evStart;
+      this.boxShownAt = Date.now();
+      this.renderEventBox(true);
+    } else if (this.evBox.visible) {
+      // 一般訊息：事件框至少留 2 秒再收起來
+      const left = 2000 - (Date.now() - (this.boxShownAt || 0));
+      const shownAt = this.boxShownAt;
+      if (left <= 0) this.hideEvent();
+      else this.time.delayedCall(left, () => { if (this.boxShownAt === shownAt) this.hideEvent(); });
+    }
   }
 
-  renderEventBox(pop = false) {
-    const box = this.evBox;
+  summarize(since) {
+    return this.changeChips(since).map((c) => c.label).join('、');
+  }
+
+  changeChips(since) {
     const gs = this.gs;
-    box.removeAll(true);
-    const w = LANDSCAPE ? 600 : MAP_VIEW.w - 110;
-    // 這個事件期間，每個人的變化加總
     const agg = new Map();
     for (const c of this.changeLog) {
-      if (c.t < this.evStart) continue;
+      if (c.t < since) continue;
       const a = agg.get(c.pid) || { money: 0, fans: 0 };
       a.money += c.money;
       a.fans += c.fans;
       agg.set(c.pid, a);
     }
     const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
-    const chips = [...agg.entries()].filter(([, a]) => a.money || a.fans).map(([pid, a]) => {
+    return [...agg.entries()].filter(([, a]) => a.money || a.fans).map(([pid, a]) => {
       const pl = gs.players[pid];
       const parts = [];
       if (a.money) parts.push(`$${sign(a.money)}`);
       if (a.fans) parts.push(`支持 ${sign(a.fans)}`);
       return { pl, label: `${pl.name} ${parts.join('  ')}` };
     });
-    this.evEntry.changes = chips.map((c) => c.label).join('、');
+  }
 
-    const txt = this.add.text(0, 18, this.evEntry.text, {
+  // 畫面中央的事件框（機會／命運、戰將成果）
+  renderEventBox(pop = false) {
+    const box = this.evBox;
+    box.removeAll(true);
+    const w = LANDSCAPE ? 600 : MAP_VIEW.w - 110;
+    const chips = this.changeChips(this.boxStart);
+    this.boxEntry.changes = chips.map((c) => c.label).join('、');
+
+    const txt = this.add.text(0, 18, this.boxEntry.text, {
       fontFamily: FONT, fontSize: '30px', color: '#fff1e8', align: 'center', lineSpacing: 6,
       wordWrap: { width: w - 36, useAdvancedWrap: true },
     }).setOrigin(0.5, 0);
@@ -209,7 +233,7 @@ class HudScene extends Phaser.Scene {
     });
     if (chips.length) h += chips.length * 46 + 6;
     h += 6;
-    const color = hex(this.evEntry.color);
+    const color = hex(this.boxEntry.color);
     box.add(this.add.rectangle(6, h / 2 + 6, w, h, 0x000000, 0.5));
     box.add(this.add.rectangle(0, h / 2, w, h, 0x1d2b53, 0.94).setStrokeStyle(5, color));
     box.add(this.add.rectangle(0, 4, w, 8, color).setOrigin(0.5, 0));
@@ -430,7 +454,7 @@ class HudScene extends Phaser.Scene {
 
   say(text) {
     this.msgText.setText(text);
-    this.showEvent(text);
+    this.showEvent(text, this.boxOn > 0);
   }
 
   layoutDice() {
