@@ -80,7 +80,7 @@ function guideHTML() {
         <p>每一區有 3 塊空地。買下後可以<b>慢慢蓋</b>：空地 → 工地 → 小建築 → <b>地標</b>。</p>
         <ul>
           <li>買下：支持者 + 價錢的 ${pct(R.buyFansRate)}。</li>
-          <li>蓋下一階段：走到自己的空地時，花價錢的一半蓋，支持者 + 價錢的 ${pct(R.buildFansRate)}。抽到機會卡「都更計畫」等，可以<b>免費</b>蓋一次。</li>
+          <li>蓋下一階段：停在或<b>經過</b>自己的空地時，可以花價錢的一半蓋，支持者 + 價錢的 ${pct(R.buildFansRate)}。抽到機會卡「都更計畫」等，可以<b>免費</b>蓋一次。</li>
           <li>蓋到第 3 階段就完工，<b>隨機</b>變成這一區的地標（例如信義區：台北101、國父紀念館、台北市政府），每個地標有<b>特殊效果</b>（見下面）。</li>
           <li>每回合：帶來 價錢 × ${pct(R.landmarkFansRate)} ×（階段 + 1）位支持者，要付租金 價錢 × ${pct(R.landmarkUpkeepRate)} ×（階段 + 1）。</li>
           <li>對手踩到：付過路費（價錢的 10% × ${R.rentMultiplier.join(' / ')} 倍），而且有 價錢 × ${pct(R.landmarkStealRate)} ×（階段 + 1）位支持者<b>倒戈</b>到你這邊。</li>

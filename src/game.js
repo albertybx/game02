@@ -818,7 +818,25 @@ class GameScene extends Phaser.Scene {
         Sfx.coin();
         this.hud.refreshPanels();
       }
+      // 經過（不是停在）自己的空地：可以付錢加蓋
+      if (dir > 0 && k < Math.abs(steps) - 1) await this.offerPassBuild(p, p.pos);
     }
+  }
+
+  async offerPassBuild(p, i) {
+    const t = TILES[i];
+    const st = this.tileState[i];
+    if (t.type !== 'property' || st.owner !== p.id || st.level >= GAME_RULES.maxLevel || p.bankrupt) return;
+    const cost = this.upgradeCost(i);
+    if (p.money < cost) return;
+    const next = BUILD_STAGES[st.level + 1];
+    this.hud.say(`${p.name} 經過自己的${this.tileName(i)}，\n要花 $${cost} 蓋成「${next}」嗎？${st.level === 2 ? '完工會變成地標！' : ''}`);
+    const ans = await this.hud.choose([
+      { label: `蓋！ $${cost}`, value: true, fill: 0x00e436 },
+      { label: '繼續走', value: false, fill: 0xc2c3c7 },
+    ], p, p.money - cost >= 400);
+    if (ans) await this.build(p, i);
+    else this.followPlayer(p);
   }
 
   async goTo(p, target) {

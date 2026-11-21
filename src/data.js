@@ -392,6 +392,9 @@ const CHANCE_CARDS = [
   { text: '都更計畫通過！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
   { text: '社區營造補助下來了！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
   { text: '建商搶著合作！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
+  { text: '市府都市更新獎勵！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
+  { text: '里民捐地蓋活動中心！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
+  { text: '企業贊助地方建設！\n免費幫你的一塊空地加蓋一個階段', freeBuild: true },
 ];
 
 const FATE_CARDS = [
