@@ -125,6 +125,46 @@ function makeCharacterTexture(scene, idx) {
 }
 
 
+// =====================================================================
+// 選角色：可以選 4 位政治人物或 12 位戰將。代號 c0～c3 是政治人物、g0～g11 是戰將。
+// 每個座位的顏色不變，只換名字和圖。
+// =====================================================================
+function castOptions() {
+  return [
+    ...CHARACTERS.map((c, i) => ({ key: `c${i}`, name: c.name, title: '候選人', image: c.image, src: `charsrc${i}` })),
+    ...GENERALS.map((g) => ({ key: `g${g.id}`, name: g.name, title: g.title, image: g.image, src: `genimg${g.id}`, genId: g.id })),
+  ];
+}
+
+function castInfo(key) { return castOptions().find((o) => o.key === key) || null; }
+
+// 預設：座位 i 用第 i 位政治人物；有不合規則（重複、找不到）的就換回預設
+function normalizeCast(cast) {
+  const out = [];
+  for (let i = 0; i < CHARACTERS.length; i++) {
+    const k = cast && cast[i];
+    out.push(castInfo(k) && !out.includes(k) ? k : null);
+  }
+  // 空的座位：補還沒被選走的政治人物，再不夠就補戰將
+  const pool = castOptions().map((o) => o.key);
+  for (let i = 0; i < out.length; i++) {
+    if (out[i]) continue;
+    out[i] = [`c${i}`, ...pool].find((k) => !out.includes(k));
+  }
+  return out;
+}
+
+// 把每個座位選的角色圖放到 charimg0…3（遊戲裡的棋子、大頭照都用這個名字）
+function applyCastTextures(scene, cast) {
+  const tex = scene.textures;
+  cast.forEach((key, i) => {
+    const info = castInfo(key);
+    if (!info || !tex.exists(info.src)) return;
+    if (tex.exists(`charimg${i}`)) tex.remove(`charimg${i}`);
+    tex.addImage(`charimg${i}`, tex.get(info.src).getSourceImage());
+  });
+}
+
 // 角色圖：有 AI 畫的圖（charimg0…）就用，沒有就用像素小圖。height = 想要的顯示高度
 function addCharacter(scene, x, y, idx, height) {
   const key = scene.textures.exists(`charimg${idx}`) ? `charimg${idx}` : `char${idx}`;

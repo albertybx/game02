@@ -74,7 +74,10 @@ class GeneralSystem {
 
   // ---------- 查詢 ----------
   ownedBy(p) { return this.list.filter((g) => g.owner === p.id); }
-  free() { return this.list.filter((g) => g.owner === null); }
+  free() { return this.list.filter((g) => g.owner === null && !g.retired); }
+
+  // 被玩家選去當候選人的戰將：不能招募
+  retire(ids) { this.list.forEach((g) => { g.retired = ids.includes(g.id); }); }
   available(p) { return this.ownedBy(p).filter((g) => g.rest === 0 && g.stationedAt === null && g.away === 0); }
   stationedAt(i) { return this.list.find((g) => g.stationedAt === i) || null; }
   ownChiefs(p) { return TILES.map((t, i) => i).filter((i) => TILES[i].type === 'chief' && this.gs.tileState[i].owner === p.id); }
