@@ -97,6 +97,7 @@ class HudScene extends Phaser.Scene {
     makeButton(this, zx, top + 338, 60, 54, '紀錄', { fill: 0x29adff, fontSize: '20px', onClick: () => this.showLog() });
 
     this.drawPoll(top + 44);
+    this.pollBox.setVisible(false); // 即時民調先不顯示（要恢復就把這行刪掉）
     this.drawTilePlate(top);
   }
 
@@ -276,6 +277,7 @@ class HudScene extends Phaser.Scene {
     const ph = Math.max(head + players.length * rowH + 4, head + R * 2 + 10);
     const x = MAP_VIEW.x + 12;
     const c = this.add.container(x, y);
+    this.pollBox = c;
     c.add(this.add.rectangle(0, 0, pw, ph, 0x1d2b53, 0.88).setOrigin(0).setStrokeStyle(3, 0x000000));
     c.add(this.add.text(10, 6, '即時民調', { fontFamily: FONT, fontSize: `${Math.round(18 * S)}px`, color: '#ffec27' }));
 
@@ -402,7 +404,7 @@ class HudScene extends Phaser.Scene {
     const st = this.gs.tileState[i];
     const dn = t.district ? TILES.filter((x) => x.district === t.district).length : 0;
     const kind = {
-      go: `經過領 $${GAME_RULES.passGoBonus}`, jam: '下回合暫停一次', mrt: '休息一下', tow: `罰款 $${GAME_RULES.towFine}`,
+      go: `經過領 $${GAME_RULES.passGoBonus}`, jam: '下回合暫停一次', mrt: '可搭到另一站', tow: `罰款 $${GAME_RULES.towFine}`,
       chance: '抽一張機會卡', fate: '抽一張命運卡', talent: '招募戰將',
       quiz: `答對 $${GAME_RULES.quizMoney}、支持者 +${GAME_RULES.quizFans}`,
       property: `${t.district}${dn > 1 ? `（${dn} 格）` : ''}・地標 $${t.price}`, chief: `${t.district}${dn > 1 ? `（${dn} 格）` : ''}・里長 $${t.price}`,

@@ -91,9 +91,15 @@ class GeneralSystem {
     return Math.min(GR().stakeMax + 3, base + (st.bonus || 0) + gov);
   }
 
+  missionName(g) {
+    if (g.mission.key === 'woo') return `去拉攏${TILES[g.mission.tile].district}里長`;
+    if (g.mission.key === 'dark') return '去找神秘金主';
+    return MISSIONS.find((m) => m.key === g.mission.key).name;
+  }
+
   statusText(g) {
     if (g.stationedAt !== null) return `駐守 ${TILES[g.stationedAt].district}（已離隊）`;
-    if (g.away > 0) return `${g.mission.key === 'woo' ? `去拉攏${TILES[g.mission.tile].district}里長` : MISSIONS.find((m) => m.key === g.mission.key).name}中，${g.away} 回合後回來`;
+    if (g.away > 0) return `${this.missionName(g)}中，${g.away} 回合後回來`;
     if (g.rest > 0) return `休息 ${g.rest} 回合`;
     return '待命';
   }
@@ -119,8 +125,25 @@ class GeneralSystem {
   async finishMission(p, g) {
     const gs = this.gs;
     if (g.mission.key === 'woo') { await this.finishWoo(p, g); return; }
+    if (g.mission.key === 'dark') { await this.finishDark(p, g); return; }
     const m = MISSIONS.find((x) => x.key === g.mission.key);
     const i = g.mission.tile;
+    if (m.money) {
+      this.setLoyalty(g, g.loyalty + GR().loyaltyMission);
+      g.idle = 0;
+      gs.followPlayer(p);
+      let got = g.mission.gain;
+      let msg = `${g.name} 辦完「${m.name}」回來了！\n帶回 $${got}`;
+      if (m.key === 'tender' && gs.tileState[i].owner !== p.id) {
+        got = GR().tenderRefund;
+        msg = `${g.name} 回來了：${TILES[i].district}里長已經不是你的，\n標案沒拿到，只退回 $${got}`;
+      }
+      gs.hud.say(msg);
+      gs.changeMoney(p, got);
+      g.mission = null;
+      await gs.wait(1100);
+      return;
+    }
     let extra = '';
     if (m.key === 'service' && gs.tileState[i].owner === p.id) {
       gs.tileState[i].bonus = Math.min(1, (gs.tileState[i].bonus || 0) + 1);
@@ -223,8 +246,23 @@ class GeneralSystem {
   // =====================================================================
   missionPlan(g, m, i, remote) {
     const R = GR();
-    const s = g[m.stat] + (g.home === TILES[i].district ? R.homeBonus : 0);
+    const s = (m.stat ? g[m.stat] : 0) + (g.home === TILES[i].district ? R.homeBonus : 0);
     let mult = 1;
+    if (m.money) {
+      if (remote && !hasSkill(g, SK.remoteFull)) mult *= R.remoteRate;
+      const turns = Math.max(1, m.turns - (hasSkill(g, SK.fastMission) ? 1 : 0));
+      if (m.key === 'tender') {
+        const v = Math.round(R.tenderMoney * mult);
+        return { mult, min: v, max: v, roll: () => v, turns, cost: R.tenderCost, money: true };
+      }
+      const base = R.dinnerBase + s * R.dinnerPerStat;
+      return {
+        mult, turns, cost: R.dinnerCost, money: true,
+        min: Math.round((base + 10) * mult),
+        max: Math.round((base + 60) * mult),
+        roll: () => Math.round((base + d6() * 10) * mult),
+      };
+    }
     if (m.key === 'media') mult *= R.mediaBonus;
     if (m.key === 'wedding' && hasSkill(g, SK.weddingX2)) mult *= 2;
     if (m.key === 'service' && hasSkill(g, SK.serviceX2)) mult *= 2;
@@ -245,7 +283,11 @@ class GeneralSystem {
     return MISSIONS.map((m) => {
       const pl = this.missionPlan(g, m, i, remote);
       const dis = p.money < pl.cost;
-      return `<button type="button" data-v="m:${m.key}:${g.id}" ${dis ? 'disabled' : ''}>${m.name}（${pl.turns} 回合）<small>看${STAT_NAMES[m.stat]}・支持 +${pl.min}～${pl.max}${pl.cost ? `・花 $${pl.cost}` : ''}${m.key === 'service' ? '・樁腳 +1' : ''}</small></button>`;
+      const what = pl.money
+        ? `${m.stat ? `看${STAT_NAMES[m.stat]}・` : ''}錢 +$${pl.min}${pl.max !== pl.min ? `～${pl.max}` : ''}`
+        : `看${STAT_NAMES[m.stat]}・支持 +${pl.min}～${pl.max}`;
+      const tip = m.key === 'tender' ? `・里長被搶走只退 $${GR().tenderRefund}` : '';
+      return `<button type="button" data-v="m:${m.key}:${g.id}" ${dis ? 'disabled' : ''}>${m.name}（${pl.turns} 回合）<small>${what}${pl.cost ? `・先付 $${pl.cost}` : ''}${m.key === 'service' ? '・樁腳 +1' : ''}${tip}</small></button>`;
     }).join('');
   }
 
@@ -254,8 +296,12 @@ class GeneralSystem {
     let best = null;
     for (const g of gens) for (const i of tiles) for (const m of MISSIONS) {
       const pl = this.missionPlan(g, m, i, remote);
-      if (pl.cost && p.money < pl.cost + 400) continue;
-      const val = (pl.min + pl.max) / 2 / pl.turns + (m.key === 'service' ? 15 : 0);
+      if (pl.cost && p.money < pl.cost + (pl.money ? 100 : 400)) continue;
+      // 錢的任務：越缺錢越想做
+      const need = p.money < 500 ? 1.6 : p.money < 1000 ? 0.8 : 0.3;
+      const val = pl.money
+        ? ((pl.min + pl.max) / 2 - pl.cost) / pl.turns * need
+        : (pl.min + pl.max) / 2 / pl.turns + (m.key === 'service' ? 15 : 0);
       if (!best || val > best.val) best = { val, g, m, i };
     }
     return best;
@@ -266,7 +312,7 @@ class GeneralSystem {
     const pl = this.missionPlan(g, m, i, remote);
     if (pl.cost) gs.changeMoney(p, -pl.cost);
     Object.assign(g, { away: pl.turns, idle: 0, mission: { key: m.key, tile: i, gain: pl.roll() } });
-    gs.hud.say(`${g.name} 出發去${TILES[i].district}${m.name}！\n${pl.turns} 回合後帶著支持者回來`);
+    gs.hud.say(`${g.name} 出發去${TILES[i].district}${m.name}！\n${pl.turns} 回合後帶著${pl.money ? '錢' : '支持者'}回來`);
     Sfx.tune([523, 659, 784], 0.07);
     gs.hud.refreshPanels();
     await gs.wait(1000);
@@ -345,7 +391,7 @@ class GeneralSystem {
     const ref = chiefs[0];
     const v = await gvModal({
       title: '遠端派任務', color: '#00e436', who: p, autoValue: auto1,
-      body: `<p class="gv-tip">不用走到里長格也能派任務，但效果 ×${GR().remoteRate}。在戰將的家鄉出任務能力 +1（下面的數字先用 ${escapeHTML(TILES[ref].district)} 算，下一步再選地點）。</p>
+      body: `<p class="gv-tip">不用走到里長格也能派任務（包括募款餐會、政府標案），但效果 ×${GR().remoteRate}。在戰將的家鄉出任務能力 +1（下面的數字先用 ${escapeHTML(TILES[ref].district)} 算，下一步再選地點）。</p>
         <div class="gv-grid">${avail.map((g) => generalCardHTML(g, `<p class="gv-sub">忠誠度 ${g.loyalty}</p><div class="gv-actions">${this.missionButtons(p, g, ref, true)}</div>`)).join('')}</div>
         <button type="button" class="gv-skip" data-v="skip">先不要</button>`,
     });
@@ -365,6 +411,65 @@ class GeneralSystem {
       i = Number(w);
     }
     await this.dispatch(p, g, m, i, true);
+  }
+
+  // ---------- 神秘的金援：派戰將去找神秘金主（人脈越高越容易成功） ----------
+  darkRate(g) { return Math.min(0.9, GAME_RULES.darkBaseRate + g.network * GAME_RULES.darkPerNetwork); }
+
+  canDark(p) { return this.available(p).length > 0 && this.gs.round >= p.darkAt + GAME_RULES.darkEvery; }
+
+  cpuWantsDark(p) {
+    if (!this.canDark(p)) return false;
+    const n = this.available(p).length;
+    return (p.money < 700 && n >= 2) || p.money < 300;
+  }
+
+  async dark(p) {
+    const gs = this.gs;
+    const R = GAME_RULES;
+    const avail = [...this.available(p)].sort((a, b) => b.network - a.network);
+    if (!avail.length) return;
+    const v = await gvModal({
+      title: '神秘的金援', color: '#7e2553', who: p, autoValue: p.human ? undefined : String(avail[0].id),
+      body: `<p class="gv-tip">派一位戰將去找「神秘的金主」，離開 ${R.darkTurns} 回合。回來時：<br>
+        <b>成功</b>：帶回 $${R.darkMoney}。<br>
+        <b>失敗</b>（被檢調盯上）：拿不到錢，支持者 -${R.darkFans}，戰將忠誠度 -${R.darkLoyalty}。<br>
+        <b>人脈</b>越高越容易成功。每 ${R.darkEvery} 回合可以做一次。</p>
+        <div class="gv-grid">${avail.map((g) => generalCardHTML(g, `<button type="button" data-v="${g.id}">派他去（成功率 ${Math.round(this.darkRate(g) * 100)}%）</button>`)).join('')}</div>
+        <button type="button" class="gv-skip" data-v="skip">先不要</button>`,
+    });
+    if (v === 'skip') return;
+    const g = this.list[Number(v)];
+    p.darkAt = gs.round;
+    Object.assign(g, { away: R.darkTurns, idle: 0, mission: { key: 'dark', tile: null, ok: Math.random() < this.darkRate(g) } });
+    gs.hud.say(`${g.name} 戴上墨鏡，悄悄出發了…\n${R.darkTurns} 回合後回來`);
+    Sfx.tune([330, 294, 262], 0.1);
+    gs.hud.refreshPanels();
+    await gs.wait(1100);
+  }
+
+  async finishDark(p, g) {
+    const gs = this.gs;
+    const R = GAME_RULES;
+    const ok = g.mission.ok;
+    g.mission = null;
+    g.idle = 0;
+    gs.followPlayer(p);
+    if (ok) {
+      this.setLoyalty(g, g.loyalty + GR().loyaltyMission);
+      gs.hud.say(`${g.name} 帶著一個沉甸甸的紙袋回來了…\n神秘的金援 +$${R.darkMoney}`);
+      gs.changeMoney(p, R.darkMoney);
+    } else if (hasSkill(g, SK.noScandal)) {
+      gs.hud.say(`${g.name} 發現金主來路不明，當場拒絕！\n沒拿到錢，但也沒出事（醫德清白）`);
+      Sfx.bad();
+    } else {
+      this.setLoyalty(g, g.loyalty - R.darkLoyalty);
+      gs.hud.say(`糟糕！${g.name} 被檢調盯上，媒體大肆報導！\n沒拿到錢，支持者 -${R.darkFans}`);
+      gs.changeFans(p, -R.darkFans);
+      Sfx.bad();
+    }
+    gs.hud.refreshPanels();
+    await gs.wait(1300);
   }
 
   // ---------- 派戰將去拉攏里長（自己拜訪過一次、還沒人拉攏的里長） ----------
