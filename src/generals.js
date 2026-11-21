@@ -87,7 +87,8 @@ class GeneralSystem {
   stability(i) {
     const st = this.gs.tileState[i];
     const base = Math.min(GR().stakeMax, 1 + Math.floor((this.gs.round - (st.since || this.gs.round)) / GR().stakeEvery));
-    return Math.min(GR().stakeMax + 1, base + (st.bonus || 0));
+    const gov = st.owner !== null && this.gs.hasEffectIn(st.owner, TILES[i].district, 'gov') ? 2 : 0;
+    return Math.min(GR().stakeMax + 3, base + (st.bonus || 0) + gov);
   }
 
   statusText(g) {
@@ -228,6 +229,7 @@ class GeneralSystem {
     if (m.key === 'wedding' && hasSkill(g, SK.weddingX2)) mult *= 2;
     if (m.key === 'service' && hasSkill(g, SK.serviceX2)) mult *= 2;
     if (remote && !hasSkill(g, SK.remoteFull)) mult *= R.remoteRate;
+    if (g.owner !== null && this.gs.hasEffectIn(g.owner, TILES[i].district, 'culture')) mult *= 1.5;
     const base = R.missionBase + s * R.missionPerStat;
     return {
       mult,
@@ -369,13 +371,22 @@ class GeneralSystem {
   wooTargets(p) {
     if (!this.available(p).length) return [];
     return TILES.map((t, i) => i).filter((i) => TILES[i].type === 'chief' && this.gs.tileState[i].owner === null
-      && this.gs.tileState[i].favor[p.id] >= 1 && !this.ownedBy(p).some((g) => g.mission && g.mission.key === 'woo' && g.mission.tile === i));
+      && !this.ownedBy(p).some((g) => g.mission && g.mission.key === 'woo' && g.mission.tile === i));
   }
 
-  wooCost(i) { return Math.round(TILES[i].price / GAME_RULES.chiefVisits); }
+  // 拜訪過一次：付另一半、2 回合；還沒拜訪過：付全額、3 回合
+  wooCost(i, p) {
+    const visited = p && this.gs.tileState[i].favor[p.id] >= 1;
+    return Math.round(TILES[i].price / (visited ? GAME_RULES.chiefVisits : 1));
+  }
+
+  wooTurns(i, p, g) {
+    const visited = this.gs.tileState[i].favor[p.id] >= 1;
+    return Math.max(1, GENERAL_RULES.wooTurns + (visited ? 0 : 1) - (hasSkill(g, SK.fastMission) ? 1 : 0));
+  }
 
   cpuWoo(p) {
-    return this.wooTargets(p).some((i) => p.money >= this.wooCost(i) + 300);
+    return this.wooTargets(p).some((i) => p.money >= this.wooCost(i, p) + 300);
   }
 
   async woo(p) {
@@ -385,24 +396,27 @@ class GeneralSystem {
     if (!targets.length) return;
     let auto;
     if (!p.human) {
-      const i = targets.find((x) => p.money >= this.wooCost(x) + 300);
+      // 先選拜訪過的（便宜、快）
+      const i = [...targets].sort((a, b) => this.wooCost(a, p) - this.wooCost(b, p)).find((x) => p.money >= this.wooCost(x, p) + 300);
       if (i === undefined) return;
       const g = avail.find((x) => x.home === TILES[i].district) || [...avail].sort((a, b) => a.network - b.network)[0];
       auto = `${i}:${g.id}`;
     }
     const v = await gvModal({
       title: '派戰將去拉攏里長', color: '#00e436', who: p, autoValue: auto,
-      body: `<p class="gv-tip">你拜訪過一次的里長，可以派戰將去完成拉攏：現在先付另一半的錢，戰將離開 ${GENERAL_RULES.wooTurns} 回合，回來時里長就是你的。如果被別人搶先拉攏，錢會退還。</p>
-        ${targets.map((i) => `<h4>${escapeHTML(TILES[i].name)}（$${this.wooCost(i)}）</h4>
-          <div class="gv-actions">${avail.map((g) => `<button type="button" data-v="${i}:${g.id}" ${p.money < this.wooCost(i) ? 'disabled' : ''}>派 ${escapeHTML(g.name)} 去<small>${Math.max(1, GENERAL_RULES.wooTurns - (hasSkill(g, SK.fastMission) ? 1 : 0))} 回合後回來</small></button>`).join('')}</div>`).join('')}
+      body: `<p class="gv-tip">派戰將去拉攏還沒人拉攏的里長，現在先付錢，戰將回來時里長就是你的（被別人搶先就退錢）。<b>拜訪過一次的</b>：只付一半、${GENERAL_RULES.wooTurns} 回合；<b>沒拜訪過的</b>：付全額、${GENERAL_RULES.wooTurns + 1} 回合。</p>
+        <div class="gv-actions">${targets.map((i) => {
+          const g = avail.find((x) => x.home === TILES[i].district) || avail[0];
+          return `<button type="button" data-v="${i}:${g.id}" ${p.money < this.wooCost(i, p) ? 'disabled' : ''}>${escapeHTML(TILES[i].name)}：$${this.wooCost(i, p)}${this.gs.tileState[i].favor[p.id] ? '（拜訪過）' : ''}<small>派 ${escapeHTML(g.name)} 去，${this.wooTurns(i, p, g)} 回合後回來${g.home === TILES[i].district ? '（家鄉）' : ''}</small></button>`;
+        }).join('')}</div>
         <button type="button" class="gv-skip" data-v="skip">先不要</button>`,
     });
     if (v === 'skip') return;
     const [i, id] = v.split(':').map(Number);
     const g = this.list[id];
-    const cost = this.wooCost(i);
+    const cost = this.wooCost(i, p);
     gs.changeMoney(p, -cost);
-    Object.assign(g, { away: Math.max(1, GENERAL_RULES.wooTurns - (hasSkill(g, SK.fastMission) ? 1 : 0)), idle: 0, mission: { key: 'woo', tile: i, cost } });
+    Object.assign(g, { away: this.wooTurns(i, p, g), idle: 0, mission: { key: 'woo', tile: i, cost } });
     gs.refreshTile(i);
     gs.hud.say(`${g.name} 出發去拉攏 ${TILES[i].name}！\n${g.away} 回合後回來`);
     Sfx.tune([523, 659, 784], 0.07);
