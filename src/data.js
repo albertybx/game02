@@ -352,6 +352,7 @@ const GENERAL_RULES = {
   maxPerPlayer: Infinity, // 每人最多幾位戰將（沒有上限）
   recruitCost: 300,       // 招募費
   recruitChoices: 2,      // 招募站一次翻幾張
+  visitWithin: 3,         // 開局保底：前 3 回合內，每人一定有一位戰將登門拜訪、免費加入
   startLoyalty: 80,       // 剛加入時的忠誠度
   poachBelow: 60,         // 忠誠度低於多少，就可能被挖角
   poachCost: 400,         // 挖角要付的錢（成功才付）

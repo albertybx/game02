@@ -123,6 +123,11 @@
     .gv-tip b { color: #ffec27; font-weight: normal; }
     .gv-sub { margin: 4px 0; font-size: 16px; color: #c2c3c7; }
     .gv-low { color: #ff77a8; font-weight: normal; }
+    .st-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 8px; }
+    .gv-modal button.st-opt { padding: 12px 6px; font-size: 20px; background: #83769c; color: #fff1e8; }
+    .gv-modal button.st-opt.st-on { background: #ffec27; color: #000; }
+    .gv-modal button.st-opt:disabled { opacity: 0.35; }
+    .gv-modal .gv-done { margin-top: 14px; }
     .cs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
     .cs-pick { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; background: #0b1020; color: #fff1e8; border: 3px solid #000; box-shadow: inset 0 0 0 2px #3a4a80; font-family: inherit; cursor: pointer; }
     .cs-pick.cs-on { box-shadow: inset 0 0 0 4px #ffec27; }
@@ -263,7 +268,7 @@
   <div id="game"></div>
   <script>
     // 版本號：每次更新遊戲就改這個（例如 2026.11.20-2），瀏覽器就會重新下載新的檔案，不會用到舊的暫存
-    window.GAME_VERSION = '2026.11.22-2';
+    window.GAME_VERSION = '2026.11.22-3';
     [
       'lib/phaser.min.js',
       'src/pixelart.js',
