@@ -5,12 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>台北政壇大富翁</title>
   <!-- 人數統計（Google Analytics）：看多少人玩過、現在有幾個人在玩 -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-1SHNLMW40C"></script>
+  <!-- 只統計正式網址上的真人：本機測試、自動測試程式（Claude、Codex 跑的）都不算；網址加 ?notrack 可以讓這台手機以後都不算 -->
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', 'G-1SHNLMW40C');
+    (function () {
+      try { if (location.search.includes('notrack')) localStorage.setItem('notrack', '1'); } catch (e) { /* 沒關係 */ }
+      var off = false;
+      try { off = localStorage.getItem('notrack') === '1'; } catch (e) { /* 沒關係 */ }
+      if (location.hostname !== 'albertybx.github.io' || navigator.webdriver || off) return;
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=G-1SHNLMW40C';
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { dataLayer.push(arguments); };
+      gtag('js', new Date());
+      gtag('config', 'G-1SHNLMW40C');
+    })();
   </script>
   <style>
     @font-face {
@@ -253,7 +263,7 @@
   <div id="game"></div>
   <script>
     // 版本號：每次更新遊戲就改這個（例如 2026.11.20-2），瀏覽器就會重新下載新的檔案，不會用到舊的暫存
-    window.GAME_VERSION = '2026.11.22-1';
+    window.GAME_VERSION = '2026.11.22-2';
     [
       'lib/phaser.min.js',
       'src/pixelart.js',
