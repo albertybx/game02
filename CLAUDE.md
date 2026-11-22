@@ -33,3 +33,34 @@
 - 遊戲網址：https://albertybx.github.io/game02/ （GitHub Pages，合併到 `main` 後一兩分鐘自動更新）
 - **每次改遊戲都要把 `index.html` 裡的 `window.GAME_VERSION` 改成新的版本號**（例如 `2026.11.20-3`），
   不然手機瀏覽器會沿用舊的暫存檔，看不到新版。標題畫面左上角會顯示版本號，方便使用者確認。
+
+## 遊戲現況（給接手的對話串）
+
+「台北政壇大富翁」：Phaser 4 像素風、斜 45 度地圖的台灣政治大富翁，手機直版、電腦橫版都能玩。規則、玩法說明看 `README.md`，遊戲裡的「選戰指南」（`src/guide.js`）也有完整規則。
+
+| 檔案 | 內容 |
+|---|---|
+| `src/data.js` | 所有數字和資料：`GAME_RULES`、`GENERAL_RULES`、地圖 `MAP_LAND`／`MAP_ROUTE`／`TILES`（78 格）、地標、戰將、任務、卡片 |
+| `src/game.js` | 遊戲流程（`playTurn`、`walk`、`resolveTile`、擲骰前行動 `preRoll`）、地圖繪製、電腦判斷（`cpu*`） |
+| `src/generals.js` | 戰將：招募、登門拜訪、任務、駐守、拔樁戰、辯論、神秘的金援 |
+| `src/hud.js` | 畫面上的介面：玩家卡、骰子、訊息、事件框、即時民調、紀錄 |
+| `src/title.js` | 首頁：選角色、人數、玩法、回合數、設定 |
+| `src/common.js`／`src/music.js` | 共用工具、音效、背景音樂（自己合成，不用 Phaser 的聲音） |
+| `docs/` | 之前的分析報告（金錢流量、任務平衡、難度設計意見） |
+| `tools/balance.js` | 平衡測試：用真正的遊戲讓 4 位電腦對打，記錄錢和支持者從哪來 |
+
+**測試方式**：在 repo 根目錄 `python3 -m http.server 8123`，用 Playwright 開 `http://localhost:8123/index.html`，
+分別用 iPhone 13 模擬和 1440×860 桌機各測一次並看截圖。平衡測試：`node tools/balance.js 名稱 8 30 all 0 8`
+（8 場、30 回合，會用到上面的本機伺服器），再 `python3 tools/balance_report.py tools/res_名稱.json`。
+
+**還沒決定的事**：
+- 難度：使用者還在考慮。A＝照 Codex 只改電腦判斷（`docs/難度設計-Codex意見.md`）；B＝A 再加上困難模式公開的小優勢（例如電腦多 300 位支持者）；C＝先不做。難度要放在首頁「設定」視窗。
+- 電腦玩家目前不會選「政府標案」任務。
+
+## 多個對話串一起做
+
+- 每個對話串開始工作前先拉最新的 `main`，用**自己的分支**（例如 `claude/難度`、`claude/新地圖`），不要共用分支。
+- 一次只做一件事，做完、測試完就開 PR 合併，盡量不要讓分支放很久，減少互相衝突。
+- 合併前如果 `main` 已經被別的對話串更新，先把 `main` 合併進自己的分支再測一次。
+  最常衝突的是 `index.html` 的 `GAME_VERSION`：用當天日期、比 `main` 上的號碼再多 1。
+- 兩個對話串不要同時大改同一個檔案的同一塊（例如都在改 `src/game.js` 的 `playTurn`），使用者分派工作時可以提醒。
