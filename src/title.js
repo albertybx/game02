@@ -67,6 +67,10 @@ class TitleScene extends Phaser.Scene {
       fill: 0xff004d, color: '#fff1e8', fontSize: '44px',
       onClick: () => {
         try { localStorage.setItem('options', JSON.stringify(this.opts)); } catch (e) { /* 存不了沒關係 */ }
+        track('game_start', {
+          rounds: this.opts.rounds, players: this.opts.playerCount, mode: this.opts.mode, quiz: this.opts.quiz ? 'yes' : 'no',
+          character: (castInfo(this.opts.cast[0]) || {}).name || '',
+        });
         this.scene.start('game', { ...this.opts });
       },
     });

@@ -1722,6 +1722,11 @@ class GameScene extends Phaser.Scene {
     if (alive.length <= 1 || (this.round >= GAME_RULES.maxRounds && lastTurnOfRound)) {
       this.gameOver = true;
       this.stopFollow();
+      const win = [...alive].sort((a, b) => b.fans - a.fans)[0];
+      track('game_end', {
+        rounds: GAME_RULES.maxRounds, round_reached: Math.min(this.round, GAME_RULES.maxRounds), mode: this.mode,
+        human_won: win && win.human ? 'yes' : 'no', winner: win ? win.name : '',
+      });
       this.hud.showResults();
       return true;
     }
