@@ -95,6 +95,7 @@ class HudScene extends Phaser.Scene {
     makeMusicButton(this, zx, top + 210);
     makeButton(this, zx, top + 274, 60, 54, '戰將', { fill: 0xffa300, fontSize: '20px', onClick: () => this.gs.generals.showRoster() });
     makeButton(this, zx, top + 338, 60, 54, '紀錄', { fill: 0x29adff, fontSize: '20px', onClick: () => this.showLog() });
+    makeButton(this, zx, top + 402, 60, 54, '勢力', { fill: 0xff77a8, fontSize: '20px', onClick: () => this.showPowerMap() });
 
     this.drawPoll(top + 44);
     this.drawTilePlate(top);
@@ -249,6 +250,88 @@ class HudScene extends Phaser.Scene {
   }
 
   hideEvent() { if (this.evBox) this.evBox.setVisible(false); }
+
+  // ---------- 台北市勢力圖：每一區照「誰買了幾格」填顏色，整區買下就整塊填滿 ----------
+  showPowerMap() {
+    if (document.querySelector('.gv-modal')) return;
+    const gs = this.gs;
+    const b = gs.board;
+    const players = gs.players;
+    const CELL = 14;
+    // 每一區：可以買的格子（空地＋里長）和誰買了
+    const info = {};
+    DISTRICTS.forEach((d) => { info[d] = { tiles: [], cells: [], own: players.map(() => 0) }; });
+    TILES.forEach((t, i) => {
+      if (!t.district || (t.type !== 'property' && t.type !== 'chief')) return;
+      const o = gs.tileState[i].owner;
+      info[t.district].tiles.push(i);
+      if (o !== null && !players[o].bankrupt) info[t.district].own[o]++;
+    });
+    const cells = [...b.land].map((k) => k.split(',').map(Number));
+    cells.forEach(([c, r]) => { const d = b.district.get(b.key(c, r)); if (info[d]) info[d].cells.push([c, r]); });
+    const minC = Math.min(...cells.map((x) => x[0]));
+    const minR = Math.min(...cells.map((x) => x[1]));
+    const maxC = Math.max(...cells.map((x) => x[0]));
+    const maxR = Math.max(...cells.map((x) => x[1]));
+    const X = (c) => (c - minC) * CELL;
+    const Y = (r) => (r - minR) * CELL;
+    let rects = '';
+    let lines = '';
+    let labels = '';
+    const color = {}; // 每一格的顏色
+    for (const d of DISTRICTS) {
+      const it = info[d];
+      const n = it.tiles.length;
+      // 從下往上填：像水位一樣，買越多格填越高；不同玩家的顏色疊上去
+      const list = [...it.cells].sort((a, c) => c[1] - a[1] || a[0] - c[0]);
+      let k = 0;
+      players.forEach((p, pi) => {
+        const cnt = Math.round(list.length * it.own[pi] / n);
+        for (let j = 0; j < cnt && k < list.length; j++, k++) color[b.key(list[k][0], list[k][1])] = p.color;
+      });
+      it.full = players.findIndex((p, pi) => it.own[pi] === n && n > 0);
+    }
+    for (const [c, r] of cells) {
+      const k = b.key(c, r);
+      const d = b.district.get(k);
+      rects += `<rect x="${X(c)}" y="${Y(r)}" width="${CELL}" height="${CELL}" fill="${color[k] || '#3a4466'}"/>`;
+      // 區和區之間畫白線
+      for (const [dc, dr, x1, y1, x2, y2] of [[1, 0, 1, 0, 1, 1], [0, 1, 0, 1, 1, 1], [-1, 0, 0, 0, 0, 1], [0, -1, 0, 0, 1, 0]]) {
+        const nk = b.key(c + dc, r + dr);
+        const nd = b.land.has(nk) ? b.district.get(nk) : null;
+        if (nd === d) continue;
+        lines += `<line x1="${X(c + x1)}" y1="${Y(r + y1)}" x2="${X(c + x2)}" y2="${Y(r + y2)}" stroke="${nd ? '#fff1e8' : '#000'}" stroke-width="${nd ? 1.5 : 2.5}"/>`;
+      }
+    }
+    for (const d of DISTRICTS) {
+      const it = info[d];
+      const cx = it.cells.reduce((s, x) => s + x[0], 0) / it.cells.length;
+      const cy = it.cells.reduce((s, x) => s + x[1], 0) / it.cells.length;
+      const owned = it.own.reduce((s, x) => s + x, 0);
+      const x = X(cx + 0.5);
+      const y = Y(cy + 0.5);
+      labels += `<text x="${x}" y="${y - 2}" class="pm-name">${it.full >= 0 ? '👑' : ''}${d.replace('區', '')}</text>`;
+      labels += `<text x="${x}" y="${y + 11}" class="pm-num">${owned}/${it.tiles.length}</text>`;
+    }
+    const w = (maxC - minC + 1) * CELL;
+    const h = (maxR - minR + 1) * CELL;
+    const total = Object.values(info).reduce((s, it) => s + it.tiles.length, 0);
+    const rows = players.map((p, pi) => {
+      const n = Object.values(info).reduce((s, it) => s + it.own[pi], 0);
+      const full = DISTRICTS.filter((d) => info[d].full === pi);
+      return `<div class="pm-row${p.bankrupt ? ' pm-out' : ''}"><i style="background:${p.color}"></i>
+        <b>${escapeHTML(p.name)}</b><span>${p.bankrupt ? '已退選' : `${n} 格・${Math.round(n / total * 100)}%`}</span>
+        <em>${full.length ? `👑 制霸：${full.join('、')}` : '還沒有整區制霸'}</em></div>`;
+    }).join('');
+    gvModal({
+      title: '台北市勢力圖', color: '#ff77a8',
+      body: `<button type="button" class="gv-skip gv-close-top" data-v="close">關閉</button>
+        <p class="gv-tip">每一區有 4 格可以買（3 塊空地＋1 位里長）。買幾格就從下往上填多少顏色；整區 4 格都是同一個人的，整塊填滿並戴上 👑（每回合支持者 +${GAME_RULES.districtBonus}）。</p>
+        <svg class="pm-map" shape-rendering="crispEdges" viewBox="-4 -4 ${w + 8} ${h + 8}" xmlns="http://www.w3.org/2000/svg">
+          <rect x="-4" y="-4" width="${w + 8}" height="${h + 8}" fill="#29366f"/>${rects}${lines}${labels}</svg>
+        <div class="pm-legend">${rows}<div class="pm-row"><i style="background:#3a4466"></i><b>還沒人買</b><span>${total - players.reduce((s, p, pi) => s + Object.values(info).reduce((t, it) => t + it.own[pi], 0), 0)} 格</span></div></div>`,
+    });
+  }
 
   showLog() {
     if (document.querySelector('.gv-modal')) return;

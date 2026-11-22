@@ -178,6 +178,16 @@
     .bt-result p { margin: 6px 0; font-size: 22px; }
     .gv-skill { margin: 4px 0 2px; font-size: 14px; color: #ffec27; line-height: 1.35; }
     .gv-modal .gv-close-top { position: sticky; top: 0; z-index: 2; margin: 0 0 10px; }
+    .pm-map { width: 100%; max-width: 560px; display: block; margin: 0 auto 10px; image-rendering: pixelated; }
+    .pm-map .pm-name, .pm-map .pm-num { font-family: 'Cubic11', sans-serif; text-anchor: middle; fill: #fff; stroke: #000; stroke-width: 3px; paint-order: stroke; }
+    .pm-map .pm-name { font-size: 12px; }
+    .pm-map .pm-num { font-size: 10px; }
+    .pm-legend { display: grid; gap: 6px; }
+    .pm-row { display: grid; grid-template-columns: 20px auto 1fr; gap: 2px 8px; align-items: center; background: #0b1020; padding: 6px 8px; border: 2px solid #000; }
+    .pm-row i { width: 20px; height: 20px; border: 2px solid #000; grid-row: span 2; }
+    .pm-row span { justify-self: end; }
+    .pm-row em { font-style: normal; font-size: 15px; color: #ffec27; grid-column: 2 / 4; }
+    .pm-row.pm-out { opacity: 0.45; }
     .lg-row { margin: 0 0 8px; padding: 6px 10px; background: #0b1020; font-size: 17px; line-height: 1.5; }
     .lg-row p { margin: 2px 0; }
     .lg-head { color: #7fd3ff; font-size: 15px; }
@@ -268,7 +278,7 @@
   <div id="game"></div>
   <script>
     // 版本號：每次更新遊戲就改這個（例如 2026.11.20-2），瀏覽器就會重新下載新的檔案，不會用到舊的暫存
-    window.GAME_VERSION = '2026.11.22-3';
+    window.GAME_VERSION = '2026.11.22-4';
     [
       'lib/phaser.min.js',
       'src/pixelart.js',
