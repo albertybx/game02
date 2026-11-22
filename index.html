@@ -4,6 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>台北政壇大富翁</title>
+  <!-- 人數統計（Google Analytics）：看多少人玩過、現在有幾個人在玩 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-1SHNLMW40C"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-1SHNLMW40C');
+  </script>
   <style>
     @font-face {
       font-family: 'Cubic11';
@@ -245,7 +253,7 @@
   <div id="game"></div>
   <script>
     // 版本號：每次更新遊戲就改這個（例如 2026.11.20-2），瀏覽器就會重新下載新的檔案，不會用到舊的暫存
-    window.GAME_VERSION = '2026.11.21-10';
+    window.GAME_VERSION = '2026.11.22-1';
     [
       'lib/phaser.min.js',
       'src/pixelart.js',

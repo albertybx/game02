@@ -199,6 +199,11 @@ function addHeadshot(scene, x, y, idx, size) {
   return img;
 }
 
+// 記錄遊戲事件到 Google Analytics（統計沒載入、被擋掉也不會影響遊戲）
+function track(name, params = {}) {
+  try { if (window.gtag) window.gtag('event', name, params); } catch (e) { /* 沒關係 */ }
+}
+
 // 打開網頁視窗（選戰指南、英文挑戰）時，暫停遊戲畫面的點擊，
 // 免得點視窗上的按鈕時，「穿透」按到底下遊戲的按鈕或建築
 function setGameInput(on) {
