@@ -27,6 +27,13 @@ const COLORS = {
 
 const hex = (s) => parseInt(s.replace('#', ''), 16);
 
+// iPhone 的聲音模式：
+//   遊戲音樂開著 → playback（像影片一樣播放，靜音開關打開也聽得到，但會暫停 Spotify 等其他音樂）
+//   遊戲音樂關掉 → ambient（音效和其他 App 的音樂混在一起播，Spotify 不會被暫停）
+function setAudioMode() {
+  try { if (navigator.audioSession) navigator.audioSession.type = Music.enabled ? 'playback' : 'ambient'; } catch (e) { /* 不支援就算了 */ }
+}
+
 // ---------- 8-bit 音效（用瀏覽器內建合成器發出方波「嗶」聲） ----------
 const Sfx = {
   ctx: null,
@@ -52,8 +59,7 @@ const Sfx = {
     src.buffer = buf;
     src.connect(this.ctx.destination);
     src.start(0);
-    // iPhone 靜音開關：把網頁聲音當成「媒體播放」，靜音開關打開時也聽得到（iOS 17 以後）
-    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 不支援就算了 */ }
+    setAudioMode();
   },
   get ready() { return !!this.ctx && this.ctx.state === 'running'; },
   beep(freq = 440, dur = 0.06, type = 'square', vol = 0.06, delay = 0) {

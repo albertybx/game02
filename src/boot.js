@@ -10,6 +10,7 @@ function startGame() {
     height: H,
     backgroundColor: '#1d2b53',
     pixelArt: true,
+    audio: { noAudio: true }, // 遊戲聲音都是自己合成的（common.js、music.js），不用 Phaser 的聲音，免得搶走手機的音樂
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: [TitleScene, GameScene, HudScene],
   });

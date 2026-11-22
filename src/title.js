@@ -40,10 +40,10 @@ class TitleScene extends Phaser.Scene {
     // 直版、橫版的位置（直版畫面比較高時整體往下移，保持置中）
     const dy = TALL_DY;
     const L = LANDSCAPE
-      ? { t1: 70, t2: 154, size: '80px', sub: 214, chars: 292, names: 360, start: 672,
-        left: { x: 70, w: 540 }, right: { x: 670, w: 540 }, rowY: [430, 500, 570] }
-      : { t1: 140 + dy, t2: 236 + dy, size: '96px', sub: 306 + dy, chars: 392 + dy, names: 458 + dy, start: 942 + dy,
-        left: { x: 30, w: 660 }, right: { x: 30, w: 660 }, rowY: [530 + dy, 604 + dy, 678 + dy, 752 + dy, 826 + dy] };
+      ? { t1: 70, t2: 154, size: '80px', sub: 214, chars: 292, S: 88, start: 680, set: 680, setX: W / 2 - 270, startX: W / 2 + 110,
+        col: { x: W / 2 - 330, w: 660 }, rowY: [440, 510, 580] }
+      : { t1: 140 + dy, t2: 236 + dy, size: '96px', sub: 306 + dy, chars: 394 + dy, S: 104, start: 942 + dy, set: 800 + dy, setX: W / 2, startX: W / 2,
+        col: { x: 30, w: 660 }, rowY: [560 + dy, 638 + dy, 716 + dy] };
 
     this.add.text(W / 2, L.t1, '台北政壇', { fontFamily: FONT, fontSize: L.size, color: '#ffec27', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
     this.add.text(W / 2, L.t2, '大富翁', { fontFamily: FONT, fontSize: L.size, color: '#ff004d', stroke: '#000000', strokeThickness: 12 }).setOrigin(0.5);
@@ -53,17 +53,14 @@ class TitleScene extends Phaser.Scene {
     this.L = L;
     this.castObjs = [];
 
-    // 選項：直版是一欄五排；橫版是左邊三排（人數、玩法、回合）、右邊兩排（英文挑戰、程度）
+    // 選項：人數、玩法、回合數；英文挑戰在「設定」裡
     const ry = L.rowY;
-    const leftCol = L.left;
-    const rightCol = L.right;
-    this.optionRow('人數', leftCol, ry[0], 'playerCount', [2, 3, 4].map((n) => ({ text: `${n} 人`, value: n })));
-    this.optionRow('玩法', leftCol, ry[1], 'mode', [{ text: '我 vs 電腦', value: 'cpu' }, { text: '朋友輪流玩', value: 'hotseat' }]);
-    this.optionRow('回合數', leftCol, ry[2], 'rounds', ROUND_OPTIONS.map((n) => ({ text: `${n} 回合`, value: n })));
-    this.optionRow('英文挑戰', rightCol, LANDSCAPE ? ry[0] : ry[3], 'quiz', [{ text: '不加入', value: false }, { text: '加入', value: true }]);
-    this.optionRow('測驗程度', rightCol, LANDSCAPE ? ry[1] : ry[4], 'quizLevel', QUIZ_LEVELS.map((lv) => ({ text: lv.name, value: lv.key })), () => this.opts.quiz);
+    this.optionRow('人數', L.col, ry[0], 'playerCount', [2, 3, 4].map((n) => ({ text: `${n} 人`, value: n })));
+    this.optionRow('玩法', L.col, ry[1], 'mode', [{ text: '單人遊玩', value: 'cpu' }, { text: '朋友對戰', value: 'hotseat' }]);
+    this.optionRow('回合數', L.col, ry[2], 'rounds', ROUND_OPTIONS.map((n) => ({ text: `${n} 回合`, value: n })));
+    this.setBtn = makeButton(this, L.setX, L.set, LANDSCAPE ? 220 : 360, LANDSCAPE ? 84 : 72, '', { fill: 0xc2c3c7, fontSize: '28px', onClick: () => this.showSettings() });
 
-    makeButton(this, W / 2, L.start, 360, LANDSCAPE ? 84 : 92, '開始選戰！', {
+    makeButton(this, L.startX, L.start, 360, LANDSCAPE ? 84 : 92, '開始選戰！', {
       fill: 0xff004d, color: '#fff1e8', fontSize: '44px',
       onClick: () => {
         try { localStorage.setItem('options', JSON.stringify(this.opts)); } catch (e) { /* 存不了沒關係 */ }
@@ -110,15 +107,46 @@ class TitleScene extends Phaser.Scene {
       const x = W / 2 + (i - (n - 1) / 2) * 160;
       const info = castInfo(this.opts.cast[i]);
       const who = this.opts.mode === 'cpu' ? (i === 0 ? '你' : '電腦') : `玩家${i + 1}`;
-      const tag = this.add.text(x, L.names + 30, `${who}・點我換`, { fontFamily: FONT, fontSize: '16px', color: '#000000', backgroundColor: CHARACTERS[i].color, padding: { x: 6, y: 2 } }).setOrigin(0.5)
+      const human = this.opts.mode !== 'cpu' || i === 0;
+      const S = L.S; // 大頭照框的大小
+      const ny = L.chars + S / 2 + 24; // 名字的位置
+      const col = hex(CHARACTERS[i].color);
+      // 真人玩家：外面一圈白色的框會明暗閃爍
+      const glow = this.add.rectangle(x, L.chars, S + 16, S + 16, 0xffffff).setVisible(human);
+      if (human) this.tweens.add({ targets: glow, alpha: 0.15, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      const frame = this.add.rectangle(x, L.chars, S + 8, S + 8, col).setStrokeStyle(3, 0x000000);
+      const bg = this.add.rectangle(x, L.chars, S, S, 0x29366f);
+      const face = addHeadshot(this, x - S / 2, L.chars - S / 2, i, S);
+      frame.setInteractive({ useHandCursor: true }).on('pointerup', () => this.pickCast(i));
+      const name = this.add.text(x, ny, info.name, { fontFamily: FONT, fontSize: '24px', color: CHARACTERS[i].color, stroke: '#000', strokeThickness: 6 }).setOrigin(0.5)
         .setInteractive({ useHandCursor: true }).on('pointerup', () => this.pickCast(i));
-      const img = addCharacter(this, x, L.chars, i, 110);
-      img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.pickCast(i));
-      this.tweens.add({ targets: img, y: L.chars - 10, duration: 400 + i * 60, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3] });
-      const name = this.add.text(x, L.names, info.name, { fontFamily: FONT, fontSize: '24px', color: CHARACTERS[i].color, stroke: '#000', strokeThickness: 6 }).setOrigin(0.5)
+      const tag = this.add.text(x, ny + 30, `${who}・點我換`, { fontFamily: FONT, fontSize: '16px', color: '#000000', backgroundColor: CHARACTERS[i].color, padding: { x: 6, y: 2 } }).setOrigin(0.5)
         .setInteractive({ useHandCursor: true }).on('pointerup', () => this.pickCast(i));
-      this.castObjs.push(tag, img, name);
+      this.castObjs.push(glow, frame, bg, face, name, tag);
     }
+  }
+
+  // 設定：英文挑戰、測驗程度
+  async showSettings() {
+    if (document.querySelector('.gv-modal')) return;
+    for (;;) {
+      const o = this.opts;
+      const row = (label, key, items, on = true) => `
+        <h4>${label}</h4>
+        <div class="st-row">${items.map((it) => `<button type="button" class="st-opt${o[key] === it.value ? ' st-on' : ''}" data-v="${key}:${it.value}" ${on ? '' : 'disabled'}>${it.text}</button>`).join('')}</div>`;
+      const v = await gvModal({
+        title: '設定', color: '#c2c3c7',
+        body: `${row('英文挑戰', 'quiz', [{ text: '不加入', value: false }, { text: '加入', value: true }])}
+          <p class="gv-tip">加入後，地圖上有 ${QUIZ_TILE_SLOTS.length} 格英文挑戰（取代 1 格機會、2 格命運），答對拿錢和支持者。</p>
+          ${row('測驗程度', 'quizLevel', QUIZ_LEVELS.map((lv) => ({ text: lv.name, value: lv.key })), o.quiz)}
+          <button type="button" class="gv-skip gv-done" data-v="done">完成</button>`,
+      });
+      if (!v || v === 'done') break;
+      const [key, val] = v.split(':');
+      o[key] = val === 'true' ? true : val === 'false' ? false : val;
+    }
+    try { localStorage.setItem('options', JSON.stringify(this.opts)); } catch (e) { /* 存不了沒關係 */ }
+    this.refresh();
   }
 
   // 選角色視窗：4 位政治人物＋12 位戰將
@@ -157,6 +185,7 @@ class TitleScene extends Phaser.Scene {
 
   refresh() {
     this.drawCast();
+    if (this.setBtn) this.setBtn.label.setText(`⚙ 設定${this.opts.quiz ? '（英文挑戰：開）' : ''}`);
     for (const row of this.rows) {
       const on = row.enabled();
       row.title.setAlpha(on ? 1 : 0.4);

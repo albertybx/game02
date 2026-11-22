@@ -56,6 +56,7 @@ class GameScene extends Phaser.Scene {
         dir: 1,         // 行走方向：1 = 照路線順序，-1 = 反方向（搭捷運後會隨機換）
         darkAt: -99,    // 上次「神秘的金援」是第幾回合
         sponsorAt: -99, // 上次「企業贊助」是第幾回合
+        visitRound: Phaser.Math.Between(1, GENERAL_RULES.visitWithin), // 第幾回合有戰將登門拜訪
         skip: 0,
         bankrupt: false,
         rallies: 0,     // 辦過幾次造勢晚會
@@ -104,7 +105,7 @@ class GameScene extends Phaser.Scene {
         obj[fn] = async (...a) => { this.hud.boxOn++; try { return await orig(...a); } finally { this.hud.boxOn--; } };
       };
       boxed(this, 'applyCard');
-      ['finishMission', 'finishWoo', 'stakeBattle', 'debate', 'scandal', 'loyaltyAll', 'onRecruit'].forEach((fn) => boxed(this.generals, fn));
+      ['finishMission', 'finishWoo', 'stakeBattle', 'debate', 'scandal', 'loyaltyAll', 'onRecruit', 'visit'].forEach((fn) => boxed(this.generals, fn));
       // 卡片叫你移動後，走到的格子是一般訊息
       const rt = this.resolveTile.bind(this);
       this.resolveTile = async (...a) => { const s = this.hud.boxOn; this.hud.boxOn = 0; try { return await rt(...a); } finally { this.hud.boxOn = s; } };
@@ -786,6 +787,11 @@ class GameScene extends Phaser.Scene {
 
     // 出任務的戰將回來
     await this.generals.onTurnStart(p);
+    // 開局保底：戰將登門拜訪
+    if (!p.visited && this.round >= p.visitRound) {
+      p.visited = true;
+      await this.generals.visit(p);
+    }
 
     // 【A】每回合開始，自己的地標和里長會帶來支持者（還有整區加成）
     const income = this.fansIncomeOf(p);

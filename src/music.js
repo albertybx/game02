@@ -181,13 +181,13 @@ const Music = {
     this.bus.gain.value = this.enabled ? 0.55 : 0;
     this.bus.connect(dest);
     this.synth = makeSynth(ctx, this.bus);
-    if (this.wanted) this.play(this.wanted);
+    if (this.wanted && this.enabled) this.play(this.wanted);
   },
 
   // 場景呼叫這個；如果音效還沒解鎖（還沒點過畫面），等解鎖後自動開始
   want(name) {
     this.wanted = name;
-    if (this.ctx) this.play(name);
+    if (this.ctx && this.enabled) this.play(name);
   },
 
   play(name) {
@@ -225,10 +225,15 @@ const Music = {
     this.enabled = on;
     try { localStorage.setItem('music', on ? '1' : '0'); } catch (e) { /* 無痕模式等情況存不了，沒關係 */ }
     if (this.bus) this.bus.gain.setTargetAtTime(on ? 0.55 : 0, this.ctx.currentTime, 0.05);
+    // 關掉：真的停止演奏（不只是調成靜音），手機才能同時播你自己的音樂
+    if (!on) this.stop();
+    else if (this.ctx && this.wanted) this.play(this.wanted);
+    setAudioMode();
   },
 };
 
 try { Music.enabled = localStorage.getItem('music') !== '0'; } catch (e) { /* 讀不到就預設開 */ }
+setAudioMode();
 
 // 音樂開關按鈕（標題和遊戲畫面都會用）
 function makeMusicButton(scene, x, y) {

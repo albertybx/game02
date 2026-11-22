@@ -244,6 +244,28 @@ class GeneralSystem {
     await gs.wait(1200);
   }
 
+  // 開局保底：隨機一位戰將登門拜訪，免費加入
+  async visit(p) {
+    const gs = this.gs;
+    const pool = this.free();
+    if (!pool.length) return;
+    const g = pool[Math.floor(Math.random() * pool.length)];
+    gs.followPlayer(p);
+    gs.hud.say(`叮咚！${g.name}（${g.title}）登門拜訪，\n說想加入 ${p.name} 的團隊！`);
+    Sfx.tune([659, 523, 659, 523], 0.09);
+    await gvModal({
+      title: '戰將登門拜訪', color: '#ffa300', who: p, autoValue: p.human ? undefined : 'ok', autoDelay: 1600,
+      body: `<p class="gv-tip">叮咚！有人來敲門：「我很欣賞你的理念，讓我加入你的團隊吧！」（免費加入）</p>
+        <div class="gv-grid">${generalCardHTML(g)}</div>
+        <button type="button" class="gv-skip gv-done" data-v="ok">歡迎加入！</button>`,
+    });
+    Object.assign(g, { owner: p.id, loyalty: GR().startLoyalty, rest: 0, stationedAt: null, idle: 0, away: 0, mission: null });
+    Sfx.buy();
+    gs.hud.say(`${g.name} 加入 ${p.name} 陣營！`);
+    gs.hud.refreshPanels();
+    await gs.wait(900);
+  }
+
   // =====================================================================
   // 派任務：戰將會離開隊伍幾回合，回來時帶回支持者
   // =====================================================================
