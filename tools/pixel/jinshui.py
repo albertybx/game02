@@ -68,7 +68,7 @@ class Layer:
 
 def leg(x, top, lift, side):
     L = Layer()
-    bot = 58 - lift
+    bot = 58 - lift + (0 if top >= 47 else top - 47)
     L.rect(x, top, x + 6, bot, 'pt')
     L.shade('pt', 'pt2', lambda X, Y: X >= x + 5 if side > 0 else X <= x)
     # 皮鞋（往外側突出一點）
@@ -86,30 +86,34 @@ def arm(sx, sy, hx, hy, beads=False):
     L.shade('sh', 'sh2', lambda X, Y: Y > (sy + hy) / 2 + 2 and X <= min(sx, hx) + 1)
     L.ell(hx - 3, hy - 2, hx + 3, hy + 3, 'sk')
     L.px([(hx + 2, hy + 2), (hx + 1, hy + 3)], 'sk2')
-    if beads:  # 佛珠：從手上垂下來的一圈
-        for i, (bx, by) in enumerate([(hx - 3, hy + 3), (hx - 4, hy + 6), (hx - 3, hy + 9), (hx - 1, hy + 11),
-                                      (hx + 2, hy + 11), (hx + 4, hy + 9), (hx + 4, hy + 6)]):
-            L.ell(bx - 1, by - 1, bx + 1, by + 1, 'bd')
-            L.px([(bx - 1, by - 1)], 'bd2')
+    return L
+
+
+def beads(hx, hy):
+    """佛珠：從手上垂下來的一圈珠子（有外框），下面掛紅色流蘇"""
+    L = Layer()
+    L.d.ellipse([hx - 6, hy + 1, hx + 3, hy + 12], outline=IDX['bd'], width=2)
+    L.shade('bd', 'bd2', lambda X, Y: (X + Y) % 3 == 0)
+    L.rect(hx - 2, hy + 13, hx - 1, hy + 16, 'vs')
+    L.px([(hx - 1, hy + 15), (hx - 1, hy + 16)], 'vs2')
     return L
 
 
 def body(by):
     L = Layer()
     # 胖胖的身體：白襯衫底
-    L.ell(11, by, 37, by + 26, 'sh')
-    L.rect(13, by + 12, 35, by + 21, 'sh')
+    L.ell(11, by, 37, by + 22, 'sh')
     # 紅背心：左右兩片，中間露出白襯衫和扣子
-    L.ell(11, by, 22, by + 26, 'vs')
-    L.rect(12, by + 6, 21, by + 21, 'vs')
-    L.ell(26, by, 37, by + 26, 'vs')
-    L.rect(27, by + 6, 36, by + 21, 'vs')
-    L.shade('vs', 'vs2', lambda X, Y: X >= 34 or Y >= by + 19)
+    L.ell(11, by, 22, by + 22, 'vs')
+    L.rect(12, by + 6, 21, by + 17, 'vs')
+    L.ell(26, by, 37, by + 22, 'vs')
+    L.rect(27, by + 6, 36, by + 17, 'vs')
+    L.shade('vs', 'vs2', lambda X, Y: X >= 34 or Y >= by + 16)
     L.shade('vs', 'vs3', lambda X, Y: X <= 13 and Y < by + 14)
     L.px([(24, by + 8), (24, by + 13), (24, by + 18)], 'sh2')  # 襯衫扣子
     L.px([(x, by + 1) for x in range(20, 29)], 'sh')  # 領口
     L.px([(21, by + 2), (27, by + 2), (22, by + 3), (26, by + 3)], 'sh2')
-    L.rect(13, by + 22, 35, by + 23, 'pt')  # 腰帶下緣（褲頭）
+    L.shade('sh', 'pt2', lambda X, Y: Y >= by + 18)  # 肚子下面是褲頭
     return L
 
 
@@ -136,6 +140,8 @@ def head(hx, hy, face='laugh'):
     L.rect(hx - 10, hy + 3, hx - 8, hy + 4, 'bl')
     L.rect(hx + 8, hy + 3, hx + 10, hy + 4, 'bl')
     if face in ('laugh', 'smile'):
+        L.px([(hx - 9, hy - 3), (hx - 8, hy - 4), (hx - 7, hy - 4), (hx - 6, hy - 4), (hx - 5, hy - 4),
+              (hx + 9, hy - 3), (hx + 8, hy - 4), (hx + 7, hy - 4), (hx + 6, hy - 4), (hx + 5, hy - 4)], 'hr2')
         # 笑瞇瞇的眼睛 ^ ^
         for ex in (hx - 6, hx + 6):
             L.px([(ex - 3, hy + 1), (ex - 2, hy), (ex - 1, hy - 1), (ex, hy - 1), (ex + 1, hy - 1), (ex + 2, hy), (ex + 3, hy + 1)], 'ol')
@@ -163,13 +169,14 @@ def frame(bob=0, legs=(0, 0), armL=(0, 0), armR=(0, 0), face='laugh', head_dy=0,
     y = -jump
     by = 30 + bob + y
     layers = []
-    layers.append(leg(16, 50 + y, legs[0], -1))
-    layers.append(leg(26, 50 + y, legs[1], 1))
+    layers.append(leg(16, 47 + y, legs[0], -1))
+    layers.append(leg(26, 47 + y, legs[1], 1))
     layers.append(body(by))
     layers.append(head(24, 18 + bob + y + head_dy, face))
     # 左手（畫面左邊）自然垂下；右手拿佛珠舉在胸前
     layers.append(arm(13, by + 5, 9 + armL[0], by + 17 + armL[1]))
-    layers.append(arm(35, by + 5, 37 + armR[0], by + 12 + armR[1], beads=True))
+    layers.append(beads(37 + armR[0], by + 12 + armR[1]))
+    layers.append(arm(35, by + 5, 37 + armR[0], by + 12 + armR[1]))
     out = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     for L in layers:
         o = L.outlined()
@@ -193,12 +200,12 @@ ANIMS = {
     # 站著：輕輕呼吸，佛珠晃一晃
     'idle': ([frame(0, armR=(0, 0)), frame(0, armR=(0, 0)), frame(1, armR=(0, 1)), frame(1, armR=(0, 1))], 220),
     # 走路：左右腳輪流抬、手前後擺、身體一上一下
-    'walk': ([frame(0, (2, 0), (2, -2), (-1, 2), 'smile'), frame(-1, (1, 0), (1, -1), (0, 1), 'smile'),
-              frame(0, (0, 0), (0, 0), (0, 0), 'smile'), frame(0, (0, 2), (-2, 2), (1, -2), 'smile'),
-              frame(-1, (0, 1), (-1, 1), (0, -1), 'smile'), frame(0, (0, 0), (0, 0), (0, 0), 'smile')], 100),
+    'walk': ([frame(0, (3, 0), (2, -3), (-1, 3), 'smile'), frame(-1, (2, 0), (1, -2), (0, 2), 'smile'),
+              frame(0, (0, 0), (0, 0), (0, 0), 'smile'), frame(0, (0, 3), (-2, 3), (1, -3), 'smile'),
+              frame(-1, (0, 2), (-1, 2), (0, -2), 'smile'), frame(0, (0, 0), (0, 0), (0, 0), 'smile')], 100),
     # 大笑跳起來：蹲 → 跳 → 落地
-    'happy': ([frame(2, face='laugh'), frame(0, armL=(-2, -12), armR=(2, -12), jump=4),
-               frame(0, armL=(-3, -14), armR=(3, -14), jump=7), frame(0, armL=(-2, -12), armR=(2, -12), jump=4),
+    'happy': ([frame(2, face='laugh'), frame(0, armL=(-1, -22), armR=(-2, -18), jump=4),
+               frame(0, armL=(-2, -25), armR=(-1, -21), jump=7), frame(0, armL=(-1, -22), armR=(-2, -18), jump=4),
                frame(2, face='laugh'), frame(0, face='laugh')], 90),
     # 沮喪：低頭、流汗
     'sad': ([frame(2, head_dy=2, face='sad', armR=(-2, 4), sweat=True), frame(3, head_dy=2, face='sad', armR=(-2, 5), sweat=True)], 400),
