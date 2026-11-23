@@ -60,6 +60,7 @@
 
 ## 請其他 AI 一起給意見
 
+- 使用者用代號點名：**#C = Claude（你）**、**#X = Codex**、**#G = Gemini**。例如「#C #X 給意見」就是你和 Codex 各給一份；只寫 #C 就是只要你做。
 - 使用者常說「你和 Codex（或 Gemini）各自給意見」：自己想一份，也請它們各想一份，再整理比較。
 - **Codex**：雲端環境開機時會裝好 `codex`（已登入）。把要讀的檔案複製到暫存資料夾，寫好 `TASK.md`，執行 `codex exec --skip-git-repo-check -s workspace-write "請讀 TASK.md 並完成裡面的任務。"`，請它寫 `codex_report.md`。
 - **Gemini**：用 `tools/ask_gemini.py`（預設 gemini-3-flash-preview，免費版可用；忙線會自動換模型）。
