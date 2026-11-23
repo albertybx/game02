@@ -4,6 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>台北政壇大富翁</title>
+  <!-- 加到手機主畫面：像 App 一樣全螢幕打開 -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#1d2b53">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="政壇大富翁">
   <!-- 人數統計（Google Analytics）：看多少人玩過、現在有幾個人在玩 -->
   <!-- 只統計正式網址上的真人：本機測試、自動測試程式（Claude、Codex 跑的）都不算；網址加 ?notrack 可以讓這台手機以後都不算 -->
   <script>
@@ -20,6 +29,8 @@
       window.gtag = function () { dataLayer.push(arguments); };
       gtag('js', new Date());
       gtag('config', 'G-1SHNLMW40C');
+      var app = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+      if (app) gtag('event', 'open_as_app');
     })();
   </script>
   <style>
@@ -278,7 +289,7 @@
   <div id="game"></div>
   <script>
     // 版本號：每次更新遊戲就改這個（例如 2026.11.20-2），瀏覽器就會重新下載新的檔案，不會用到舊的暫存
-    window.GAME_VERSION = '2026.11.22-4';
+    window.GAME_VERSION = '2026.11.23-1';
     [
       'lib/phaser.min.js',
       'src/pixelart.js',
