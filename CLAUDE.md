@@ -48,6 +48,7 @@
 | `src/common.js`／`src/music.js` | 共用工具、音效、背景音樂（自己合成，不用 Phaser 的聲音） |
 | `docs/` | 之前的分析報告（金錢流量、任務平衡、難度設計意見） |
 | `tools/balance.js` | 平衡測試：用真正的遊戲讓 4 位電腦對打，記錄錢和支持者從哪來 |
+| `tools/ask_gemini.py` | 請 Gemini 讀遊戲程式回答問題：`python3 tools/ask_gemini.py "問題" 輸出.md`（金鑰在雲端環境的網路密鑰裡，代理自動加上） |
 
 **測試方式**：在 repo 根目錄 `python3 -m http.server 8123`，用 Playwright 開 `http://localhost:8123/index.html`，
 分別用 iPhone 13 模擬和 1440×860 桌機各測一次並看截圖。平衡測試：`node tools/balance.js 名稱 8 30 all 0 8`
@@ -56,6 +57,12 @@
 **還沒決定的事**：
 - 難度：使用者還在考慮。A＝照 Codex 只改電腦判斷（`docs/難度設計-Codex意見.md`）；B＝A 再加上困難模式公開的小優勢（例如電腦多 300 位支持者）；C＝先不做。難度要放在首頁「設定」視窗。
 - 電腦玩家目前不會選「政府標案」任務。
+
+## 請其他 AI 一起給意見
+
+- 使用者常說「你和 Codex（或 Gemini）各自給意見」：自己想一份，也請它們各想一份，再整理比較。
+- **Codex**：雲端環境開機時會裝好 `codex`（已登入）。把要讀的檔案複製到暫存資料夾，寫好 `TASK.md`，執行 `codex exec --skip-git-repo-check -s workspace-write "請讀 TASK.md 並完成裡面的任務。"`，請它寫 `codex_report.md`。
+- **Gemini**：用 `tools/ask_gemini.py`（預設 gemini-3-flash-preview，免費版可用；忙線會自動換模型）。
 
 ## 多個對話串一起做
 
