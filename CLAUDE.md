@@ -26,7 +26,8 @@
 ## 更新 skill
 
 `.claude/skills/` 是建立 repo 當下從範本複製過來的，不會自動更新。使用者想更新時，從上面的上游 repo
-取最新版，覆蓋 `.claude/skills/`，並保留 `.claude/skills-license/` 裡的授權檔。
+取最新版，覆蓋 `.claude/skills/`，並保留 `.claude/skills-license/` 裡的授權檔，以及我們自己寫的
+`.claude/skills/taipei-art-pipeline/`（上游沒有，覆蓋時不要刪掉）。
 
 ## 發佈新版（這個遊戲專案）
 
@@ -48,11 +49,15 @@
 | `src/common.js`／`src/music.js` | 共用工具、音效、背景音樂（自己合成，不用 Phaser 的聲音） |
 | `docs/` | 之前的分析報告（金錢流量、任務平衡、難度設計意見） |
 | `tools/balance.js` | 平衡測試：用真正的遊戲讓 4 位電腦對打，記錄錢和支持者從哪來 |
+| `assets/ASSETS.md` | 每張素材的來源和授權紀錄，換圖或加圖時要補一行 |
 | `tools/ask_gemini.py` | 請 Gemini 讀遊戲程式回答問題：`python3 tools/ask_gemini.py "問題" 輸出.md`（金鑰在雲端環境的網路密鑰裡，代理自動加上） |
 
 **測試方式**：在 repo 根目錄 `python3 -m http.server 8123`，用 Playwright 開 `http://localhost:8123/index.html`，
 分別用 iPhone 13 模擬和 1440×860 桌機各測一次並看截圖。平衡測試：`node tools/balance.js 名稱 8 30 all 0 8`
 （8 場、30 回合，會用到上面的本機伺服器），再 `python3 tools/balance_report.py tools/res_名稱.json`。
+
+**畫圖、換圖**：先讀 `.claude/skills/taipei-art-pipeline/SKILL.md`。重點：請 Codex 用 `image_gen` 畫（不要寫程式一格一格畫，試過效果很差），
+建築要對齊 2:1 菱形地磚，一定要縮到遊戲實際大小給使用者看。
 
 **還沒決定的事**：
 - 轉蛋／政策牛肉／道具：三方意見在 `docs/轉蛋道具-Codex.md`、`docs/轉蛋道具-Gemini.md`，Claude 的意見在對話裡，使用者還在決定。
