@@ -83,6 +83,7 @@ class GameScene extends Phaser.Scene {
     this.drawGround();
     this.drawRoad();
     this.drawLots();
+    this.drawOutlines();
     TILES.forEach((t, i) => this.refreshTile(i));
     this.stationIcons = [];
     this.drawTrees();
@@ -304,12 +305,12 @@ class GameScene extends Phaser.Scene {
       if (!land.has(key(col + 1, row))) {
         sides.fillStyle(MAP_STYLE.cliffRight, 1).fillPoints([R, B, { x: B.x, y: B.y + 40 }, { x: R.x, y: R.y + 40 }], true);
         sides.fillStyle(MAP_STYLE.cliffRightTop, 1).fillPoints([R, B, { x: B.x, y: B.y + 8 }, { x: R.x, y: R.y + 8 }], true);
-        if (MAP_STYLE.shoreLine !== null) sides.lineStyle(3, MAP_STYLE.shoreLine, 0.9).lineBetween(R.x, R.y + 40, B.x, B.y + 40);
+        if (MAP_STYLE.shoreLine !== null) sides.lineStyle(3, MAP_STYLE.shoreLine, 0.9).lineBetween(R.x, R.y + 43, B.x, B.y + 43);
       }
       if (!land.has(key(col, row + 1))) {
         sides.fillStyle(MAP_STYLE.cliffLeft, 1).fillPoints([L, B, { x: B.x, y: B.y + 40 }, { x: L.x, y: L.y + 40 }], true);
         sides.fillStyle(MAP_STYLE.cliffLeftTop, 1).fillPoints([L, B, { x: B.x, y: B.y + 8 }, { x: L.x, y: L.y + 8 }], true);
-        if (MAP_STYLE.shoreLine !== null) sides.lineStyle(3, MAP_STYLE.shoreLine, 0.9).lineBetween(L.x, L.y + 40, B.x, B.y + 40);
+        if (MAP_STYLE.shoreLine !== null) sides.lineStyle(3, MAP_STYLE.shoreLine, 0.9).lineBetween(L.x, L.y + 43, B.x, B.y + 43);
       }
       if (textured) {
         this.keepStatic(this.add.image(x, y, 'bld_grass_tile').setDepth(-899).setScale(STYLE === 2 ? 1.04 : 1));
@@ -353,6 +354,40 @@ class GameScene extends Phaser.Scene {
         this.diamond(g, c.x, c.y, ISO_W * 1.8, ISO_H * 1.8, 0xd9c7a3);
         this.diamond(g, c.x, c.y, ISO_W * 0.9, ISO_H * 0.9, 0x29adff);
       }
+    }
+  }
+
+  // 深色邊線（風格 2）：道路外緣、島嶼邊緣、懸崖的轉角和底部；各區草地之間不畫
+  drawOutlines() {
+    if (MAP_STYLE.outline === null) return;
+    const { land, key } = this.board;
+    const road = new Set(this.board.path.map((c) => key(c.col, c.row)));
+    const g = this.keepStatic(this.add.graphics().setDepth(-795));
+    const cliff = this.keepStatic(this.add.graphics().setDepth(-940));
+    g.lineStyle(3, MAP_STYLE.outline, 0.9);
+    cliff.lineStyle(3, MAP_STYLE.outline, 0.9);
+    const corners = new Map(); // 懸崖邊的端點 → 用到它的邊的方向
+    const mark = (p, dir) => { const k = `${p.x},${p.y}`; const e = corners.get(k) || { p, dirs: [] }; e.dirs.push(dir); corners.set(k, e); };
+    for (const k of land) {
+      const [col, row] = k.split(',').map(Number);
+      const { x, y } = this.iso(col, row);
+      const T = { x, y: y - ISO_H / 2 }, R = { x: x + ISO_W / 2, y }, B = { x, y: y + ISO_H / 2 }, L = { x: x - ISO_W / 2, y };
+      // 四條邊和旁邊那一格：左上(col-1)、右上(row-1)、右下(col+1)、左下(row+1)
+      const edges = [[L, T, key(col - 1, row), 0], [T, R, key(col, row - 1), 1], [R, B, key(col + 1, row), 2], [B, L, key(col, row + 1), 3]];
+      for (const [a, b, nk, side] of edges) {
+        const edgeOfLand = !land.has(nk);
+        const edgeOfRoad = road.has(k) && !road.has(nk);
+        if (edgeOfLand || edgeOfRoad) g.lineBetween(a.x, a.y, b.x, b.y);
+        if (edgeOfLand && side >= 2) { // 前面的海岸：懸崖底部也描一條
+          cliff.lineBetween(a.x, a.y + 40, b.x, b.y + 40);
+          mark(a, side); mark(b, side);
+        }
+      }
+    }
+    // 懸崖的直立轉角：只在海岸轉彎或結束的地方畫，直直一整排的中間不畫
+    for (const { p, dirs } of corners.values()) {
+      if (dirs.length === 2 && dirs[0] === dirs[1]) continue;
+      cliff.lineBetween(p.x, p.y, p.x, p.y + 40);
     }
   }
 
