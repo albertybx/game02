@@ -16,7 +16,7 @@ class TitleScene extends Phaser.Scene {
   preload() {
     // AI 畫的建築圖（登記在 data.js 的 BUILDING_IMAGES）
     const v = `?v=${window.GAME_VERSION || ''}`; // 版本號：更新後瀏覽器會重新下載圖片
-    for (const [key, path] of Object.entries(BUILDING_IMAGES)) this.load.image(`bld_${key}`, path + v);
+    for (const [key, path] of Object.entries(BUILDING_IMAGES)) this.load.image(`bld_${key}`, stylePath(path) + v);
     CHARACTERS.forEach((ch, i) => { if (ch.image) this.load.image(`charsrc${i}`, ch.image + v); });
     GENERALS.forEach((g) => this.load.image(`genimg${g.id}`, g.image + v));
     this.load.on('loaderror', (file) => console.warn('圖片載入失敗：', file.src));
@@ -73,7 +73,7 @@ class TitleScene extends Phaser.Scene {
     });
 
     // 版本號（確認是不是最新版用）
-    this.add.text(12, H - 30, `版本 ${window.GAME_VERSION || ''}`, { fontFamily: FONT, fontSize: '18px', color: '#83769c' });
+    this.add.text(12, H - 30, `版本 ${window.GAME_VERSION || ''}${STYLE === 2 ? '・風格 2（測試）' : ''}`, { fontFamily: FONT, fontSize: '18px', color: '#83769c' });
     this.refresh();
     if (!Sfx.ready) this.showPressStart();
   }
