@@ -6,10 +6,11 @@
 //   風格 3：秋天的像素城市風（使用者的城市插畫參考），淺米色細邊線
 //   風格 4：跟風格 3 同一套素材，改成深色邊線
 //   風格 5：直接用 Codex 畫的風格 3 概念圖當整張地面（邊線、樹、路燈都是原圖畫的）
+//   風格 6：原版地圖降低飽和度、各區顏色變柔和、樹的比例統一
 // 新風格的圖放在 assets/style2/、assets/style3/，檔名和原本的一樣；STYLE_FILES 沒列到的圖就照用原本的。
 // =====================================================================
 const STYLE = (() => {
-  try { const v = Number(new URLSearchParams(window.location.search).get('style')); return [2, 3, 4, 5].includes(v) ? v : 1; } catch (e) { return 1; }
+  try { const v = Number(new URLSearchParams(window.location.search).get('style')); return [2, 3, 4, 5, 6].includes(v) ? v : 1; } catch (e) { return 1; }
 })();
 
 // 地面素材（風格 2、3 都有新圖）
@@ -28,9 +29,10 @@ const STYLE_FILES = {
   3: new Set(GROUND_FILES),
   4: new Set(GROUND_FILES),
   5: new Set(GROUND_FILES),
+  6: new Set([...GROUND_FILES, 'assets/ground/fountain.png']),
 };
 // 每個風格的圖放在哪個資料夾（風格 4 共用風格 3 的圖）
-const STYLE_DIR = { 2: 'style2', 3: 'style3', 4: 'style3', 5: 'style3' };
+const STYLE_DIR = { 2: 'style2', 3: 'style3', 4: 'style3', 5: 'style3', 6: 'style6' };
 
 // 圖片路徑：用新風格而且有新圖，就換成 assets/style2/、assets/style3/ 裡的
 function stylePath(path) {
@@ -90,4 +92,22 @@ MAP_STYLES[4] = { ...MAP_STYLES[3], outline: 0x3a2b33, outlineWidth: 3, outlineD
 // 風格 5：整張地面直接用概念圖（ground 是圖片和它在地圖上的位置，跟遊戲格子對齊過）
 // 程式不再畫草地、道路、人行磚、懸崖、樹和邊線，只畫遊戲需要的東西（空地框、路上的標記、建築）
 MAP_STYLES[5] = { ...MAP_STYLES[3], outline: null, waterColor: 0x397884, ground: { image: 'assets/style3/map_concept.jpg', x: 46, y: -80, w: 1708, h: 1992 } };
+// 風格 6：原版的樣子，但沒那麼鮮豔
+// 各區顏色：原版的顏色往灰綠拉一半（不那麼搶眼），疊淡一點
+const SOFT_TINTS = (() => {
+  const base = { 中正區: 0x8dc63f, 萬華區: 0x3f7a1a, 大同區: 0xf7941d, 中山區: 0xf7cc1d, 士林區: 0xf5be91, 北投區: 0xed9471,
+    內湖區: 0xc5ff49, 松山區: 0xfff949, 南港區: 0x004a80, 信義區: 0x7da7d8, 文山區: 0x002157, 大安區: 0xacd373 };
+  const mix = (c, m, t) => Math.round(((c >> 16) & 255) * (1 - t) + ((m >> 16) & 255) * t) << 16
+    | Math.round(((c >> 8) & 255) * (1 - t) + ((m >> 8) & 255) * t) << 8 | Math.round((c & 255) * (1 - t) + (m & 255) * t);
+  const out = {};
+  for (const [k, c] of Object.entries(base)) out[k] = mix(c, 0x8fa874, 0.55);
+  return out;
+})();
+MAP_STYLES[6] = {
+  ...MAP_STYLES[1],
+  cliffRight: 0x6e5040, cliffRightTop: 0x86817c, cliffLeft: 0x8a6a52, cliffLeftTop: 0x9d9a95,
+  tints: SOFT_TINTS, tintAlpha: 0.38, borderAlpha: 0.35,
+  // 三種樹用同一個縮放比例（像素大小一致），隨機大小變化縮小
+  treeScale: 0.3, treeJitter: [0.95, 1.05],
+};
 const MAP_STYLE = MAP_STYLES[STYLE];

@@ -529,8 +529,11 @@ class GameScene extends Phaser.Scene {
     if (kinds.length) {
       const total = kinds.reduce((n, k) => n + k[2], 0);
       let pick = rnd.frac() * total;
-      const [key, h] = kinds.find((k) => (pick -= k[2]) < 0) || kinds[0];
-      const t = addIcon(this, x, y + 4, key, h * rnd.realInRange(0.85, 1.1)).setOrigin(0.5, 1).setDepth(y);
+      const [key, h0] = kinds.find((k) => (pick -= k[2]) < 0) || kinds[0];
+      // 有設定 treeScale 的風格：每種樹用同一個縮放比例，像素大小才會一致
+      const h = MAP_STYLE.treeScale ? this.textures.get(`bld_${key}`).getSourceImage().height * MAP_STYLE.treeScale : h0;
+      const [j0, j1] = MAP_STYLE.treeJitter || [0.85, 1.1];
+      const t = addIcon(this, x, y + 4, key, h * rnd.realInRange(j0, j1)).setOrigin(0.5, 1).setDepth(y);
       if (rnd.frac() < 0.5) t.setFlipX(true);
       if (MAP_STYLE.treeTint !== null) t.setTint(MAP_STYLE.treeTint);
       if (this.treeStatic) this.keepStatic(t);
