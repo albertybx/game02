@@ -17,6 +17,7 @@ class TitleScene extends Phaser.Scene {
     // AI 畫的建築圖（登記在 data.js 的 BUILDING_IMAGES）
     const v = `?v=${window.GAME_VERSION || ''}`; // 版本號：更新後瀏覽器會重新下載圖片
     for (const [key, path] of Object.entries(BUILDING_IMAGES)) this.load.image(`bld_${key}`, stylePath(path) + v);
+    if (MAP_STYLE.ground) this.load.image('style_ground', MAP_STYLE.ground.image + v); // 風格 5：整張地面圖
     CHARACTERS.forEach((ch, i) => { if (ch.image) this.load.image(`charsrc${i}`, ch.image + v); });
     GENERALS.forEach((g) => this.load.image(`genimg${g.id}`, g.image + v));
     this.load.on('loaderror', (file) => console.warn('圖片載入失敗：', file.src));

@@ -5,10 +5,11 @@
 //   風格 2：灰綠柔和（使用者用 GPT 重畫的地圖）
 //   風格 3：秋天的像素城市風（使用者的城市插畫參考），淺米色細邊線
 //   風格 4：跟風格 3 同一套素材，改成深色邊線
+//   風格 5：直接用 Codex 畫的風格 3 概念圖當整張地面（邊線、樹、路燈都是原圖畫的）
 // 新風格的圖放在 assets/style2/、assets/style3/，檔名和原本的一樣；STYLE_FILES 沒列到的圖就照用原本的。
 // =====================================================================
 const STYLE = (() => {
-  try { const v = Number(new URLSearchParams(window.location.search).get('style')); return [2, 3, 4].includes(v) ? v : 1; } catch (e) { return 1; }
+  try { const v = Number(new URLSearchParams(window.location.search).get('style')); return [2, 3, 4, 5].includes(v) ? v : 1; } catch (e) { return 1; }
 })();
 
 // 地面素材（風格 2、3 都有新圖）
@@ -26,9 +27,10 @@ const STYLE_FILES = {
   2: new Set(GROUND_FILES),
   3: new Set(GROUND_FILES),
   4: new Set(GROUND_FILES),
+  5: new Set(GROUND_FILES),
 };
 // 每個風格的圖放在哪個資料夾（風格 4 共用風格 3 的圖）
-const STYLE_DIR = { 2: 'style2', 3: 'style3', 4: 'style3' };
+const STYLE_DIR = { 2: 'style2', 3: 'style3', 4: 'style3', 5: 'style3' };
 
 // 圖片路徑：用新風格而且有新圖，就換成 assets/style2/、assets/style3/ 裡的
 function stylePath(path) {
@@ -85,4 +87,7 @@ const MAP_STYLES = {
 };
 // 風格 4：風格 3 換成深色邊線（道路外緣、島嶼邊緣、懸崖），各區之間不畫線
 MAP_STYLES[4] = { ...MAP_STYLES[3], outline: 0x3a2b33, outlineWidth: 3, outlineDistricts: false };
+// 風格 5：整張地面直接用概念圖（ground 是圖片和它在地圖上的位置，跟遊戲格子對齊過）
+// 程式不再畫草地、道路、人行磚、懸崖、樹和邊線，只畫遊戲需要的東西（空地框、路上的標記、建築）
+MAP_STYLES[5] = { ...MAP_STYLES[3], outline: null, waterColor: 0x397884, ground: { image: 'assets/style3/map_concept.jpg', x: 46, y: -80, w: 1708, h: 1992 } };
 const MAP_STYLE = MAP_STYLES[STYLE];
