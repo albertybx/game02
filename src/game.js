@@ -275,6 +275,11 @@ class GameScene extends Phaser.Scene {
 
   // ---------- 畫地圖 ----------
   drawWater() {
+    // 風格 5：地圖外面的水用純色（整張地面圖的邊緣也淡成這個顏色，接起來看不出接縫）
+    if (MAP_STYLE.waterColor !== undefined) {
+      this.add.rectangle(-2600, -1800, 8000, 6000, MAP_STYLE.waterColor).setOrigin(0).setDepth(-1000);
+      return;
+    }
     // 背景的河水：有 AI 畫的材質就鋪滿並慢慢流動，沒有就畫簡單的波紋
     if (this.textures.exists('bld_water')) {
       const water = this.add.tileSprite(-2600, -1800, 8000, 6000, 'bld_water').setOrigin(0).setDepth(-1000);
@@ -290,6 +295,13 @@ class GameScene extends Phaser.Scene {
   }
 
   drawGround() {
+    // 風格 5：整張地面直接用一張圖（草地、懸崖、樹都畫在圖裡了）
+    if (MAP_STYLE.ground && this.textures.exists('style_ground')) {
+      const gr = MAP_STYLE.ground;
+      this.add.image(gr.x, gr.y, 'style_ground').setOrigin(0).setDisplaySize(gr.w, gr.h).setDepth(-900);
+      this.drawPark();
+      return;
+    }
     const { land, key, park } = this.board;
     const g = this.keepStatic(this.add.graphics().setDepth(-900));
     const sides = this.keepStatic(this.add.graphics().setDepth(-950));
@@ -344,7 +356,13 @@ class GameScene extends Phaser.Scene {
       if (land.has(key(col - 1, row)) && this.board.district.get(key(col - 1, row)) !== d) border.lineBetween(x - ISO_W / 2, y, T.x, T.y);
       if (land.has(key(col, row - 1)) && this.board.district.get(key(col, row - 1)) !== d) border.lineBetween(T.x, T.y, x + ISO_W / 2, y);
     }
-    // 城市中間的公園噴水池（佔 2x2 格）
+    this.drawPark();
+  }
+
+  // 城市中間的公園噴水池（佔 2x2 格）
+  drawPark() {
+    const g = this.add.graphics().setDepth(-900);
+    const { park } = this.board;
     if (park) {
       const c = this.iso(park.col + 0.5, park.row + 0.5);
       if (this.textures.exists('bld_fountain')) {
@@ -402,7 +420,10 @@ class GameScene extends Phaser.Scene {
       const { x, y } = this.tileCenter(i);
       const special = FULL_TILE_TYPES.includes(t.type);
       // 路面：有 AI 柏油路就用，沒有就畫灰色菱形
-      if (this.textures.exists('bld_road_tile')) {
+      if (MAP_STYLE.ground) {
+        // 風格 5：路面畫在整張地面圖裡，只留點選格子用的範圍
+        this.addNameZone(this.add.zone(x, y, ISO_W - 10, ISO_H - 6).setDepth(-790), i);
+      } else if (this.textures.exists('bld_road_tile')) {
         this.keepStatic(this.add.image(x, y, 'bld_road_tile').setDepth(-801));
         this.addNameZone(this.add.zone(x, y, ISO_W - 10, ISO_H - 6).setDepth(-790), i);
         this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30, MAP_STYLE.roadLineAlpha);
@@ -444,7 +465,9 @@ class GameScene extends Phaser.Scene {
       if (!cell) return;
       const { x, y } = this.iso(cell.col, cell.row);
       // 空地：人行磚（有 AI 地磚就用）
-      if (this.textures.exists('bld_plaza_tile')) {
+      if (MAP_STYLE.ground) {
+        // 風格 5：人行磚畫在整張地面圖裡
+      } else if (this.textures.exists('bld_plaza_tile')) {
         this.keepStatic(this.add.image(x, y, 'bld_plaza_tile').setDepth(-701).setScale((ISO_W - 8) / ISO_W));
       } else {
         this.diamond(g, x, y, ISO_W - 8, ISO_H - 4, 0xd9cbb0);
@@ -478,6 +501,7 @@ class GameScene extends Phaser.Scene {
   }
 
   drawTrees() {
+    if (MAP_STYLE.ground) return; // 風格 5：樹畫在整張地面圖裡
     const { land, inside, taken, key } = this.board;
     const rnd = new Phaser.Math.RandomDataGenerator(['trees']);
     for (const k of land) {
