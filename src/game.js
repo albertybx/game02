@@ -302,15 +302,17 @@ class GameScene extends Phaser.Scene {
       const B = { x, y: y + ISO_H / 2 };
       const L = { x: x - ISO_W / 2, y };
       if (!land.has(key(col + 1, row))) {
-        sides.fillStyle(0x6b4226, 1).fillPoints([R, B, { x: B.x, y: B.y + 40 }, { x: R.x, y: R.y + 40 }], true);
-        sides.fillStyle(0x7d7d7d, 1).fillPoints([R, B, { x: B.x, y: B.y + 8 }, { x: R.x, y: R.y + 8 }], true);
+        sides.fillStyle(MAP_STYLE.cliffRight, 1).fillPoints([R, B, { x: B.x, y: B.y + 40 }, { x: R.x, y: R.y + 40 }], true);
+        sides.fillStyle(MAP_STYLE.cliffRightTop, 1).fillPoints([R, B, { x: B.x, y: B.y + 8 }, { x: R.x, y: R.y + 8 }], true);
+        if (MAP_STYLE.shoreLine !== null) sides.lineStyle(3, MAP_STYLE.shoreLine, 0.9).lineBetween(R.x, R.y + 40, B.x, B.y + 40);
       }
       if (!land.has(key(col, row + 1))) {
-        sides.fillStyle(0x8a5a33, 1).fillPoints([L, B, { x: B.x, y: B.y + 40 }, { x: L.x, y: L.y + 40 }], true);
-        sides.fillStyle(0x9e9e9e, 1).fillPoints([L, B, { x: B.x, y: B.y + 8 }, { x: L.x, y: L.y + 8 }], true);
+        sides.fillStyle(MAP_STYLE.cliffLeft, 1).fillPoints([L, B, { x: B.x, y: B.y + 40 }, { x: L.x, y: L.y + 40 }], true);
+        sides.fillStyle(MAP_STYLE.cliffLeftTop, 1).fillPoints([L, B, { x: B.x, y: B.y + 8 }, { x: L.x, y: L.y + 8 }], true);
+        if (MAP_STYLE.shoreLine !== null) sides.lineStyle(3, MAP_STYLE.shoreLine, 0.9).lineBetween(L.x, L.y + 40, B.x, B.y + 40);
       }
       if (textured) {
-        this.keepStatic(this.add.image(x, y, 'bld_grass_tile').setDepth(-899));
+        this.keepStatic(this.add.image(x, y, 'bld_grass_tile').setDepth(-899).setScale(STYLE === 2 ? 1.04 : 1));
         continue;
       }
       this.diamond(g, x, y, ISO_W, ISO_H, (col + row) % 2 === 0 ? 0x5fb34a : 0x56a843);
@@ -321,16 +323,18 @@ class GameScene extends Phaser.Scene {
     }
     // 各區草地蓋一層淡淡的顏色
     const tintG = this.keepStatic(this.add.graphics().setDepth(-860));
+    const tintWhole = STYLE === 2; // 風格 2：整層一起半透明，相鄰格子重疊處不會變深成接縫線
+    if (tintWhole) tintG.setAlpha(MAP_STYLE.tintAlpha);
     for (const k of land) {
       const [col, row] = k.split(',').map(Number);
-      const c = DISTRICT_TINTS[this.board.district.get(k)];
+      const c = (MAP_STYLE.tints || DISTRICT_TINTS)[this.board.district.get(k)];
       if (c === undefined) continue;
       const { x, y } = this.iso(col, row);
-      this.diamond(tintG, x, y, ISO_W + 1, ISO_H + 1, c, 0.45);
+      this.diamond(tintG, x, y, ISO_W + 1, ISO_H + 1, c, tintWhole ? 1 : MAP_STYLE.tintAlpha);
     }
     // 區界線：旁邊是別的區，就在那條邊畫一條白線
     const border = this.keepStatic(this.add.graphics().setDepth(-850));
-    border.lineStyle(4, 0xffffff, 0.55);
+    border.lineStyle(4, 0xffffff, MAP_STYLE.borderAlpha);
     for (const k of land) {
       const [col, row] = k.split(',').map(Number);
       const d = this.board.district.get(k);
@@ -362,7 +366,7 @@ class GameScene extends Phaser.Scene {
       if (this.textures.exists('bld_road_tile')) {
         this.keepStatic(this.add.image(x, y, 'bld_road_tile').setDepth(-801));
         this.addNameZone(this.add.zone(x, y, ISO_W - 10, ISO_H - 6).setDepth(-790), i);
-        this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30, 0.5);
+        this.diamondLine(g, x, y, ISO_W, ISO_H, 2, 0x2a2a30, MAP_STYLE.roadLineAlpha);
       } else {
         this.diamond(g, x, y + 4, ISO_W, ISO_H, 0x3b3b44);
         this.diamond(g, x, y, ISO_W, ISO_H, special ? 0xb8a98a : 0x5a5a66);
@@ -443,7 +447,7 @@ class GameScene extends Phaser.Scene {
       // 斜 45 度的畫面裡，樹會擋住「在它後面（左上方）」的東西。
       // 後面緊鄰的是路、建築或公園的話就不種樹，免得擋住
       if (taken.has(key(col - 1, row)) || taken.has(key(col, row - 1)) || taken.has(key(col - 1, row - 1))) continue;
-      if (rnd.frac() > (inside.has(k) ? 0.5 : 0.45)) continue;
+      if (rnd.frac() > (inside.has(k) ? 0.5 : 0.45) * MAP_STYLE.treeRate) continue;
       // 附近兩格內都沒有路和建築的樹，畫進大圖（不會擋到角色）
       let far = true;
       for (let dc = -2; dc <= 2 && far; dc++) for (let dr = -2; dr <= 2; dr++) if (taken.has(key(col + dc, row + dr))) { far = false; break; }
@@ -465,6 +469,7 @@ class GameScene extends Phaser.Scene {
       const [key, h] = kinds.find((k) => (pick -= k[2]) < 0) || kinds[0];
       const t = addIcon(this, x, y + 4, key, h * rnd.realInRange(0.85, 1.1)).setOrigin(0.5, 1).setDepth(y);
       if (rnd.frac() < 0.5) t.setFlipX(true);
+      if (MAP_STYLE.treeTint !== null) t.setTint(MAP_STYLE.treeTint);
       if (this.treeStatic) this.keepStatic(t);
       return;
     }

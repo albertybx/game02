@@ -5,7 +5,7 @@
 
 function guideImg(name) {
   const path = BUILDING_IMAGES[name];
-  return path ? `<img src="${path}?v=${window.GAME_VERSION || ''}" alt="">` : '';
+  return path ? `<img src="${stylePath(path)}?v=${window.GAME_VERSION || ''}" alt="">` : '';
 }
 
 function guideHTML() {
