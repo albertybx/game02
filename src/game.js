@@ -313,7 +313,7 @@ class GameScene extends Phaser.Scene {
         if (MAP_STYLE.shoreLine !== null) sides.lineStyle(3, MAP_STYLE.shoreLine, 0.9).lineBetween(L.x, L.y + 43, B.x, B.y + 43);
       }
       if (textured) {
-        this.keepStatic(this.add.image(x, y, 'bld_grass_tile').setDepth(-899).setScale(STYLE === 2 ? 1.04 : 1));
+        this.keepStatic(this.add.image(x, y, 'bld_grass_tile').setDepth(-899).setScale(STYLE > 1 ? 1.04 : 1));
         continue;
       }
       this.diamond(g, x, y, ISO_W, ISO_H, (col + row) % 2 === 0 ? 0x5fb34a : 0x56a843);
@@ -324,7 +324,7 @@ class GameScene extends Phaser.Scene {
     }
     // 各區草地蓋一層淡淡的顏色
     const tintG = this.keepStatic(this.add.graphics().setDepth(-860));
-    const tintWhole = STYLE === 2; // 風格 2：整層一起半透明，相鄰格子重疊處不會變深成接縫線
+    const tintWhole = STYLE > 1; // 新風格：整層一起半透明，相鄰格子重疊處不會變深成接縫線
     if (tintWhole) tintG.setAlpha(MAP_STYLE.tintAlpha);
     for (const k of land) {
       const [col, row] = k.split(',').map(Number);
@@ -364,8 +364,10 @@ class GameScene extends Phaser.Scene {
     const road = new Set(this.board.path.map((c) => key(c.col, c.row)));
     const g = this.keepStatic(this.add.graphics().setDepth(-795));
     const cliff = this.keepStatic(this.add.graphics().setDepth(-940));
-    g.lineStyle(3, MAP_STYLE.outline, 0.9);
-    cliff.lineStyle(3, MAP_STYLE.outline, 0.9);
+    const lw = MAP_STYLE.outlineWidth || 3;
+    g.lineStyle(lw, MAP_STYLE.outline, 0.9);
+    cliff.lineStyle(lw, MAP_STYLE.outline, 0.9);
+    const district = this.board.district;
     const corners = new Map(); // 懸崖邊的端點 → 用到它的邊的方向
     const mark = (p, dir) => { const k = `${p.x},${p.y}`; const e = corners.get(k) || { p, dirs: [] }; e.dirs.push(dir); corners.set(k, e); };
     for (const k of land) {
@@ -377,7 +379,9 @@ class GameScene extends Phaser.Scene {
       for (const [a, b, nk, side] of edges) {
         const edgeOfLand = !land.has(nk);
         const edgeOfRoad = road.has(k) && !road.has(nk);
-        if (edgeOfLand || edgeOfRoad) g.lineBetween(a.x, a.y, b.x, b.y);
+        // 各區之間：只畫左上、右上兩條邊，同一條線才不會畫兩次
+        const edgeOfDistrict = MAP_STYLE.outlineDistricts && side < 2 && land.has(nk) && district.get(nk) !== district.get(k);
+        if (edgeOfLand || edgeOfRoad || edgeOfDistrict) g.lineBetween(a.x, a.y, b.x, b.y);
         if (edgeOfLand && side >= 2) { // 前面的海岸：懸崖底部也描一條
           cliff.lineBetween(a.x, a.y + 40, b.x, b.y + 40);
           mark(a, side); mark(b, side);

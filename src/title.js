@@ -73,7 +73,7 @@ class TitleScene extends Phaser.Scene {
     });
 
     // 版本號（確認是不是最新版用）
-    this.add.text(12, H - 30, `版本 ${window.GAME_VERSION || ''}${STYLE === 2 ? '・風格 2（測試）' : ''}`, { fontFamily: FONT, fontSize: '18px', color: '#83769c' });
+    this.add.text(12, H - 30, `版本 ${window.GAME_VERSION || ''}${STYLE > 1 ? `・風格 ${STYLE}（測試）` : ''}`, { fontFamily: FONT, fontSize: '18px', color: '#83769c' });
     this.refresh();
     if (!Sfx.ready) this.showPressStart();
   }

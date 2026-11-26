@@ -60,9 +60,10 @@ description: 「台北政壇大富翁」專用的美術流程：用畫圖 AI（C
 
 ## 三之一、風格切換（測試中）
 
-- 網址加 `?style=2` 會用新風格，程式在 `src/style.js`；首頁版本號旁會顯示「風格 2（測試）」
-- 新圖放 `assets/style2/`，**路徑和檔名跟原本一樣**（例如 `assets/style2/ground/iso_grass.png`），並加進 `STYLE2_FILES`
-- 地圖的顏色（海岸、各區草地、區界線、樹的多寡和顏色）在 `MAP_STYLE`
+- 網址加 `?style=2`、`?style=3` 會用新風格，程式在 `src/style.js`；首頁版本號旁會顯示「風格 N（測試）」
+- 新圖放 `assets/style2/`、`assets/style3/`，**路徑和檔名跟原本一樣**（例如 `assets/style3/ground/iso_grass.png`），並加進 `STYLE_FILES`
+- 地圖的顏色（海岸、各區草地、區界線、邊線粗細、樹的多寡和顏色）在 `MAP_STYLES`
+- 做新地圖風格的好方法：請 Codex 先用 image_gen 以原版地圖（`docs/images/地圖底圖-*.png`）為底畫整張概念圖，再拆成素材，並從概念圖取色寫成 palette.json
 - 改完要確認原本的風格完全沒變：把河水和樹藏起來（每局隨機），比對改前改後的整張地圖
 
 ## 四、做一張新圖的流程
