@@ -3,7 +3,7 @@
 // 網址後面加 ?style=2 或 ?style=3 就會用新風格，例如 https://albertybx.github.io/game02/?style=3
 // 沒加就是原本的風格，一般玩家看不到這個開關。
 //   風格 2：灰綠柔和（使用者用 GPT 重畫的地圖）
-//   風格 3：粉嫩柔和＋漫畫邊線
+//   風格 3：秋天的像素城市風（使用者的城市插畫參考）
 // 新風格的圖放在 assets/style2/、assets/style3/，檔名和原本的一樣；STYLE_FILES 沒列到的圖就照用原本的。
 // =====================================================================
 const STYLE = (() => {
@@ -49,21 +49,21 @@ const MAP_STYLES = {
   treeRate: 0.45,        // 樹的多寡（1 = 跟原本一樣多）
   treeTint: 0xb4c8ac,    // 樹的顏色稍微壓深
   },
-  3: { // 粉嫩柔和＋漫畫邊線（配色由 Codex 從概念圖取色）
-  cliffRight: 0xf5aa92, cliffRightTop: 0xffc5ad,
-  cliffLeft: 0xfdbb9b, cliffLeftTop: 0xffd5b5,
-  tintAlpha: 0.86,
+  3: { // 秋天的像素城市風（Codex 照使用者的參考圖重畫，配色從概念圖取色）
+  cliffRight: 0x996d59, cliffRightTop: 0xcbb3a8,
+  cliffLeft: 0xb9896b, cliffLeftTop: 0xe5d0c6,
+  tintAlpha: 0.48,
   tints: {
-    中正區: 0xfdb0c9, 萬華區: 0xfdc7a3, 大同區: 0xfde8b9, 中山區: 0xfdef9c, 士林區: 0xc7f8c6, 北投區: 0x98f2c4,
-    內湖區: 0xbcf4dd, 松山區: 0xbddcfd, 南港區: 0xb4b5fc, 信義區: 0xddbefc, 文山區: 0xf3c2fb, 大安區: 0x8bcffd,
+    中正區: 0xb1b474, 萬華區: 0xb3be7c, 大同區: 0xabaa5a, 中山區: 0x909d54, 士林區: 0xb1bd7a, 北投區: 0x91ab86,
+    內湖區: 0x9fad73, 松山區: 0xa0b373, 南港區: 0xa9ae5a, 信義區: 0xaebc7a, 文山區: 0xa7b47e, 大安區: 0xb2be7b,
   },
   borderAlpha: 0,
   roadLineAlpha: 0,
-  outline: 0x43234b,
-  outlineWidth: 5,   // 漫畫風的粗邊線
-  outlineDistricts: false,
-  shoreLine: 0x75bdeb,
-  treeRate: 0.7,
+  outline: 0xe4ddbb,
+  outlineWidth: 2,
+  outlineDistricts: true,
+  shoreLine: 0x537f85,
+  treeRate: 0.85,
   treeTint: null,
   },
   1: {
