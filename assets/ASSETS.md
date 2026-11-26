@@ -13,4 +13,5 @@
 | `style2/ground/*.png`（草地、道路、人行磚、河水、3 種樹） | Codex image_gen 生成，Pillow 轉成菱形和無縫 | 2026-11-26 | 依 OpenAI 使用條款 | 風格 2（測試中），風格參考是使用者用 GPT 重畫的地圖 |
 | `style3/ground/*.png`（草地、道路、人行磚、河水、秋天的樹、街燈、矮樹叢） | Codex image_gen 生成（以原版地圖為底的概念圖拆成素材），Pillow 轉成菱形和無縫 | 2026-11-26 | 依 OpenAI 使用條款 | 風格 3：秋天的像素城市風（測試中）。使用者給的參考插畫是別人的作品，只學畫風，沒有放進遊戲、沒有照抄內容 |
 | `style3/map_concept.jpg` | Codex image_gen 畫的風格 3 整張地圖概念圖，縮成 1708×1992、邊緣淡成水色 | 2026-11-26 | 依 OpenAI 使用條款 | 風格 5 直接當整張地面 |
+| `style6/ground/*.png` | 原版 `ground/` 素材用 Pillow 降低飽和度和對比 | 2026-11-26 | 同原版 | 風格 6 |
 | `fonts/Cubic_11.woff2` | 俐方體 11 號（Cubic 11） | | SIL OFL，見 `fonts/Cubic_11-OFL.txt` | 可商用 |
