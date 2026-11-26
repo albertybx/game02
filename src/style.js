@@ -3,11 +3,12 @@
 // 網址後面加 ?style=2 或 ?style=3 就會用新風格，例如 https://albertybx.github.io/game02/?style=3
 // 沒加就是原本的風格，一般玩家看不到這個開關。
 //   風格 2：灰綠柔和（使用者用 GPT 重畫的地圖）
-//   風格 3：秋天的像素城市風（使用者的城市插畫參考）
+//   風格 3：秋天的像素城市風（使用者的城市插畫參考），淺米色細邊線
+//   風格 4：跟風格 3 同一套素材，改成深色邊線
 // 新風格的圖放在 assets/style2/、assets/style3/，檔名和原本的一樣；STYLE_FILES 沒列到的圖就照用原本的。
 // =====================================================================
 const STYLE = (() => {
-  try { const v = Number(new URLSearchParams(window.location.search).get('style')); return [2, 3].includes(v) ? v : 1; } catch (e) { return 1; }
+  try { const v = Number(new URLSearchParams(window.location.search).get('style')); return [2, 3, 4].includes(v) ? v : 1; } catch (e) { return 1; }
 })();
 
 // 地面素材（風格 2、3 都有新圖）
@@ -24,11 +25,14 @@ const GROUND_FILES = [
 const STYLE_FILES = {
   2: new Set(GROUND_FILES),
   3: new Set(GROUND_FILES),
+  4: new Set(GROUND_FILES),
 };
+// 每個風格的圖放在哪個資料夾（風格 4 共用風格 3 的圖）
+const STYLE_DIR = { 2: 'style2', 3: 'style3', 4: 'style3' };
 
 // 圖片路徑：用新風格而且有新圖，就換成 assets/style2/、assets/style3/ 裡的
 function stylePath(path) {
-  return STYLE > 1 && STYLE_FILES[STYLE].has(path) ? path.replace('assets/', `assets/style${STYLE}/`) : path;
+  return STYLE > 1 && STYLE_FILES[STYLE].has(path) ? path.replace('assets/', `assets/${STYLE_DIR[STYLE]}/`) : path;
 }
 
 // 地圖的顏色：海岸側面、各區草地的顏色、區界線
@@ -79,4 +83,6 @@ const MAP_STYLES = {
   treeTint: null,
   },
 };
+// 風格 4：風格 3 換成深色邊線（道路外緣、島嶼邊緣、懸崖），各區之間不畫線
+MAP_STYLES[4] = { ...MAP_STYLES[3], outline: 0x3a2b33, outlineWidth: 3, outlineDistricts: false };
 const MAP_STYLE = MAP_STYLES[STYLE];
