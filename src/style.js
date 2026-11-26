@@ -35,7 +35,8 @@ const MAP_STYLE = STYLE === 2 ? {
     內湖區: 0x97d562, 松山區: 0xc2d68a, 南港區: 0x7ab283, 信義區: 0x7fa35a, 文山區: 0x5f8a4e, 大安區: 0xa9c06a,
   },
   borderAlpha: 0.12,
-  roadLineAlpha: 0.25,
+  roadLineAlpha: 0,      // 路面格子之間不畫線（路看起來是連續的一條）
+  outline: 0x2b2433,     // 深色邊線：道路外緣、島嶼邊緣、懸崖轉角和底部
   shoreLine: 0xe8eef2,   // 岸邊和水面交界的白色細邊
   treeRate: 0.45,        // 樹的多寡（1 = 跟原本一樣多）
   treeTint: 0xb4c8ac,    // 樹的顏色稍微壓深
@@ -46,6 +47,7 @@ const MAP_STYLE = STYLE === 2 ? {
   tints: null,
   borderAlpha: 0.55,
   roadLineAlpha: 0.5,
+  outline: null,
   shoreLine: null,
   treeRate: 1,
   treeTint: null,
