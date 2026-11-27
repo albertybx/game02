@@ -7,10 +7,11 @@
 //   風格 4：跟風格 3 同一套素材，改成深色邊線
 //   風格 5：直接用 Codex 畫的風格 3 概念圖當整張地面（邊線、樹、路燈都是原圖畫的）
 //   風格 6：原版地圖降低飽和度、各區顏色變柔和、樹的比例統一
+//   風格 7：風格 6＋一套新畫的樹（8 種、深灰外框、像素大小一致）
 // 新風格的圖放在 assets/style2/、assets/style3/，檔名和原本的一樣；STYLE_FILES 沒列到的圖就照用原本的。
 // =====================================================================
 const STYLE = (() => {
-  try { const v = Number(new URLSearchParams(window.location.search).get('style')); return [2, 3, 4, 5, 6].includes(v) ? v : 1; } catch (e) { return 1; }
+  try { const v = Number(new URLSearchParams(window.location.search).get('style')); return [2, 3, 4, 5, 6, 7].includes(v) ? v : 1; } catch (e) { return 1; }
 })();
 
 // 地面素材（風格 2、3 都有新圖）
@@ -30,9 +31,10 @@ const STYLE_FILES = {
   4: new Set(GROUND_FILES),
   5: new Set(GROUND_FILES),
   6: new Set([...GROUND_FILES, 'assets/ground/fountain.png']),
+  7: new Set([...GROUND_FILES, 'assets/ground/fountain.png']),
 };
 // 每個風格的圖放在哪個資料夾（風格 4 共用風格 3 的圖）
-const STYLE_DIR = { 2: 'style2', 3: 'style3', 4: 'style3', 5: 'style3', 6: 'style6' };
+const STYLE_DIR = { 2: 'style2', 3: 'style3', 4: 'style3', 5: 'style3', 6: 'style6', 7: 'style6' };
 
 // 圖片路徑：用新風格而且有新圖，就換成 assets/style2/、assets/style3/ 裡的
 function stylePath(path) {
@@ -109,5 +111,20 @@ MAP_STYLES[6] = {
   tints: SOFT_TINTS, tintAlpha: 0.38, borderAlpha: 0.35,
   // 三種樹用同一個縮放比例（像素大小一致），隨機大小變化縮小
   treeScale: 0.3, treeJitter: [0.95, 1.05],
+};
+// 風格 7：風格 6 的地面＋新畫的 5 種樹（[圖片代號, 檔案, 出現機率]）
+MAP_STYLES[7] = {
+  ...MAP_STYLES[6],
+  treeScale: 0.32,
+  trees: [
+    ['bld_tree_round', 'assets/style7/trees/tree_round.png', 5],
+    ['bld_tree_cone', 'assets/style7/trees/tree_cone.png', 3],
+    ['bld_tree_bush', 'assets/style7/trees/tree_bush.png', 4],
+    ['bld_tree_palm', 'assets/style7/trees/tree_palm.png', 1],
+    ['bld_tree_flower', 'assets/style7/trees/tree_flower.png', 1],
+    ['bld_tree_sakura', 'assets/style7/trees/tree_sakura.png', 1.5], // 櫻花
+    ['bld_tree_tung', 'assets/style7/trees/tree_tung.png', 1.5],     // 油桐花
+    ['bld_tree_cypress', 'assets/style7/trees/tree_cypress.png', 1.5], // 落羽松
+  ],
 };
 const MAP_STYLE = MAP_STYLES[STYLE];
