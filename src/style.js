@@ -7,7 +7,7 @@
 //   風格 4：跟風格 3 同一套素材，改成深色邊線
 //   風格 5：直接用 Codex 畫的風格 3 概念圖當整張地面（邊線、樹、路燈都是原圖畫的）
 //   風格 6：原版地圖降低飽和度、各區顏色變柔和、樹的比例統一
-//   風格 7：風格 6＋一套新畫的樹（5 種，像素大小一致）
+//   風格 7：風格 6＋一套新畫的樹（8 種、深灰外框、像素大小一致）
 // 新風格的圖放在 assets/style2/、assets/style3/，檔名和原本的一樣；STYLE_FILES 沒列到的圖就照用原本的。
 // =====================================================================
 const STYLE = (() => {
@@ -122,6 +122,9 @@ MAP_STYLES[7] = {
     ['bld_tree_bush', 'assets/style7/trees/tree_bush.png', 4],
     ['bld_tree_palm', 'assets/style7/trees/tree_palm.png', 1],
     ['bld_tree_flower', 'assets/style7/trees/tree_flower.png', 1],
+    ['bld_tree_sakura', 'assets/style7/trees/tree_sakura.png', 1.5], // 櫻花
+    ['bld_tree_tung', 'assets/style7/trees/tree_tung.png', 1.5],     // 油桐花
+    ['bld_tree_cypress', 'assets/style7/trees/tree_cypress.png', 1.5], // 落羽松
   ],
 };
 const MAP_STYLE = MAP_STYLES[STYLE];
