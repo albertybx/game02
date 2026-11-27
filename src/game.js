@@ -524,7 +524,10 @@ class GameScene extends Phaser.Scene {
   }
 
   drawTree(x, y, rnd) {
-    const kinds = [['tree1', 58, 6], ['tree2', 88, 2], ['tree3', 32, 4]] // [圖, 高度, 出現機率]
+    // [圖, 高度, 出現機率]；風格有自己的一套樹（MAP_STYLE.trees）就用那套
+    const kinds = (MAP_STYLE.trees
+      ? MAP_STYLE.trees.map(([key, , weight]) => [key.replace(/^bld_/, ''), 0, weight])
+      : [['tree1', 58, 6], ['tree2', 88, 2], ['tree3', 32, 4]])
       .filter(([k]) => this.textures.exists(`bld_${k}`));
     if (kinds.length) {
       const total = kinds.reduce((n, k) => n + k[2], 0);
